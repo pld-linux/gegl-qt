@@ -21,6 +21,7 @@ BuildRequires:	doxygen
 BuildRequires:	gegl-devel >= 0.2.0
 BuildRequires:	pkgconfig
 BuildRequires:	qt4-qmake
+BuildRequires:	texlive-latex-extend
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %description
