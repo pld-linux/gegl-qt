@@ -1,0 +1,2194 @@
+diff --git a/.gitignore b/.gitignore
+index 12b7315..5803045 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,5 +1,6 @@
+ Makefile
+ *.o
++*.a
+ *.so*
+ moc_*
+ qrc_*
+diff --git a/README.txt b/README.txt
+index bfa2160..cd92909 100644
+--- a/README.txt
++++ b/README.txt
+@@ -2,10 +2,10 @@ gegl-qt: Qt utility library for GEGL.
+ 
+ License: LGPLv3+
+ Maintainer: Jon Nordby <jononor@gmail.com>
+-Homepage: http://www.gegl.org
++Homepage: http://www.gegl.org/gegl-qt
+ Code: http://git.gnome.org/browse/gegl-qt/
+ Bugtracker: http://bugs.gnome.org, product GEGL (use gegl-qt in title)
+-Mailinglist: http://blog.gmane.org/gmane.comp.video.gegl.devel
++Mailinglist: http://mail.gnome.org/mailman/listinfo/gegl-developer-list
+ 
+ == Installing ==
+ gegl-qt uses the qmake build system. To install do:
+@@ -27,6 +27,9 @@ To use gegl-qt in your project, use the provided pkg-config file.
+ See this file, the examples and source code, for now. :)
+ 
+ == Features ==
++
++- Support for both Qt4 and Qt5.
++
+ === View widgets ===
+ - Shows the output of a Gegl graph.
+ - QML, QGraphicsView and QWidget versions are provided.
+@@ -34,14 +37,14 @@ See this file, the examples and source code, for now. :)
+ - Can do automatic scaling and centering
+ 
+ === Gegl display operation ===
+-Allows applications to show a
++Allows applications to show a GEGL graph in a window without linking
++against a specific UI library.
+ 
+ == Purpose & Scope ==
+ The purpose of gegl-qt is to make it easy for application developers to
+ use GEGL in applications with Qt based user interfaces.
+ 
+-gegl-qt aims to support Qt4 and both QWidget, QGraphicsView and QML based user interfaces.
+-Qt5 support will be considered in the future.
++gegl-qt aims to support Qt4 and Qt5 for both QWidget, QGraphicsView and QML based user interfaces.
+ 
+ == Contributing ==
+ To contribute code, please file a bug and attach git-formatted patches there, or link to
+@@ -61,13 +64,13 @@ Should at happen before or together with the next Gegl release.
+ Need to build and work with whatever is the latest Gegl release.
+ 
+ - Do API review
+-- API documentation
++
++- Complete Qt5 support
+ 
+ - Have a basic set of tests, and good test infrastructure
+ - Distribute a set of basic examples for the provided features
+-* Missing: use of view->model transformations
+-* Examples needs to have a description, and be commented
+-- Add information about gegl-qt to gegl.org website
++ * Missing: use of view->model transformations
++ * Examples needs to have a description, and be commented
+ 
+ === Later ===
+ 
+@@ -77,7 +80,7 @@ Display operation
+ 
+ View widgets
+ - Rotation support
+-- Background and overlay draw support for GeglQtView
++- Background and overlay draw support for GeglQt::NodeView
+ 
+ QImage IO loader plugin that uses GEGL loaders
+ 
+diff --git a/config.pri b/config.pri
+index 50c4500..b279869 100644
+--- a/config.pri
++++ b/config.pri
+@@ -6,10 +6,10 @@ GEGLQT_VERSION = 0.0.7
+ GEGLQT_PROJECTBRIEF = "Integration library for using GEGL in Qt based applications"
+ 
+ GEGLQT_API_VERSION = 0.1
+-GEGLQT_BASELIBNAME = gegl-qt4
++GEGLQT_BASELIBNAME = gegl-qt$$QT_MAJOR_VERSION
+ GEGLQT_LIBNAME = $$GEGLQT_BASELIBNAME-$$GEGLQT_API_VERSION
+ 
+-GEGLQT_QML_API_NAME = GeglQt4
++GEGLQT_QML_API_NAME = GeglQt$$QT_MAJOR_VERSION
+ GEGLQT_QML_API_VERSION_MAJOR = 0
+ GEGLQT_QML_API_VERSION_MINOR = 1
+ GEGLQT_QML_API_VERSION = 0.1
+@@ -17,6 +17,29 @@ GEGLQT_QML_API_VERSION = 0.1
+ OBJECTS_DIR = .obj
+ MOC_DIR = .moc
+ 
++### Hard dependencies ###
++
++# GEGL
++HAVE_GEGL = no
++GEGL_PKG = ""
++
++contains(HAVE_GEGL, no) {
++    system(pkg-config --exists gegl-0.2) {
++        HAVE_GEGL = 0.2
++        GEGL_PKG = gegl-0.2
++    }
++}
++
++contains(HAVE_GEGL, no) {
++    system(pkg-config --exists gegl) {
++        HAVE_GEGL = 0.1
++        GEGL_PKG = gegl
++    }
++}
++
++contains(HAVE_GEGL, no):error("Could not find required dependency: GEGL")
++
++### Options ###
+ # Can be used to specify custom install prefix
+ isEmpty(GEGLQT_INSTALL_PREFIX) {
+     GEGLQT_INSTALL_PREFIX = /usr
+@@ -29,22 +52,69 @@ isEmpty(GEGLQT_INSTALL_PREFIX) {
+ }
+ 
+ # Paths for installing files
+-GEGL_LIBDIR = $$system(pkg-config --variable libdir gegl)
+-GEGL_INSTALL_OPERATIONS = $$system(pkg-config --variable pluginsdir gegl)
++GEGL_LIBDIR = $$system(pkg-config --variable libdir $$GEGL_PKG)
++GEGL_INSTALL_OPERATIONS = $$system(pkg-config --variable pluginsdir $$GEGL_PKG)
+ isEmpty(GEGL_INSTALL_OPERATIONS) {
+-    GEGL_INSTALL_OPERATIONS = $$GEGL_LIBDIR/gegl-0.1/
++    GEGL_INSTALL_OPERATIONS = $$GEGL_LIBDIR/gegl-$$HAVE_GEGL/
+ }
+ 
+-# Optional deps
++#
++isEmpty(QTDECLARATIVE_INSTALL_PLUGINS) {
++    QTDECLARATIVE_INSTALL_PLUGINS = $$[QT_INSTALL_IMPORTS]
++}
++
++### Optional deps ###
++# QtDeclarative
+ HAVE_QT_DECLARATIVE = yes
+-!system(pkg-config QtDeclarative){
++contains(QT_MAJOR_VERSION, 5) {
++    !contains(QT_CONFIG, declarative) {
++        HAVE_QT_DECLARATIVE = no
++    }
++} else {
++    !system(pkg-config QtDeclarative) {
++        HAVE_QT_DECLARATIVE = no
++    }
++}
++
++# QtQuick1 provides QDeclarativeView and QDeclarativeItem
++# On Qt4 it is actually a part of the QtDeclarative module
++HAVE_QT_QUICK1 = yes
++contains(QT_MAJOR_VERSION, 5) {
++    !contains(QT_CONFIG, quick1) {
++        HAVE_QT_QUICK1 = no
++    }
++} else {
++    !contains(HAVE_QT_DECLARATIVE, yes) {
++        HAVE_QT_QUICK1 = no
++    }
++}
++
++# On Qt5, quick or quick1 is required in addition to declarative for "QT" option
++# On Qt4, it should only contain declarative
++contains(QT_MAJOR_VERSION, 5) {
++    QT_DECLARATIVE = declarative quick
++    contains(HAVE_QT_QUICK1, yes) {
++        QT_DECLARATIVE += quick1
++    }
++} else {
++    QT_DECLARATIVE = declarative
++}
++
++contains(HAVE_QT_DECLARATIVE, no) {
+     !build_pass:system(echo "QtDeclarative not found - no QML support")
+-    HAVE_QT_DECLARATIVE = no
+ }
+ 
+-HAVE_PYSIDE = yes
+-!system(pkg-config pyside){
+-    !build_pass:system(echo "PySide not found - no Python support")
++isEmpty(HAVE_PYSIDE) {
++    HAVE_PYSIDE = yes
++    !system(pkg-config pyside){
++        !build_pass:system(echo "PySide not found - no Python support")
++        HAVE_PYSIDE = no
++    }
++}
++
++# Can go away when PySide supports Qt5
++contains(QT_MAJOR_VERSION, 5) {
++    !build_pass:system(echo "PySide not supported with Qt 5 - no Python support")
+     HAVE_PYSIDE = no
+ }
+ 
+@@ -62,6 +132,26 @@ isEmpty(PDFLATEX){
+     HAVE_PDFLATEX = no
+ }
+ 
++# QtWidgets
++HAVE_QT_WIDGETS = yes
++contains(QT_MAJOR_VERSION, 5) {
++    !system(pkg-config QtWidgets) {
++        HAVE_QT_WIDGETS = no
++    }
++} else {
++    # Qt4 always has QtWidgets
++}
++
++!contains(HAVE_QT_WIDGETS, yes) {
++    !build_pass:system(echo "QtWidgets not found - no QtWidgets support")
++}
++
++# On Qt5, widgets is required in addition to gui for "QT" option
++# On Qt4, it should be empty
++contains(QT_MAJOR_VERSION, 5) {
++    QT_WIDGETS = widgets
++}
++
+ GEGLQT_INSTALL_BIN = $$GEGLQT_INSTALL_PREFIX/bin
+ GEGLQT_INSTALL_HEADERS = $$GEGLQT_INSTALL_PREFIX/include
+ GEGLQT_INSTALL_LIBS = $$GEGLQT_INSTALL_PREFIX/lib
+@@ -90,6 +180,8 @@ SUBST_VARIABLES += \
+     GEGLQT_DECLARATIVE_PKGCONFIG \
+     GEGLQT_PROJECTBRIEF \
+     GEGLQT_PROJECTNAME \
++    GEGLQT_IN_PWD \
++    GEGL_PKG \
+ 
+ # Generate the specified file from its .in template, and substitute variables
+ # Variables to be substituted in .in files must be of the form @VARIABLE_NAME@
+@@ -97,6 +189,8 @@ defineTest(outputFile) {
+     out = $$OUT_PWD/$$1
+     in = $$PWD/$${1}.in
+ 
++    GEGLQT_IN_PWD = $$IN_PWD
++
+     !exists($$in) {
+         error($$in does not exist!)
+         return(false)
+diff --git a/doc/.gitignore b/doc/.gitignore
+index 84af060..fe10952 100644
+--- a/doc/.gitignore
++++ b/doc/.gitignore
+@@ -1,4 +1,4 @@
+ Doxyfile
+ html
+ latex
+-
++gegl-qt
+diff --git a/examples/common/common.pro b/examples/common/common.pro
+new file mode 100644
+index 0000000..e149662
+--- /dev/null
++++ b/examples/common/common.pro
+@@ -0,0 +1,17 @@
++include(../../config.pri)
++
++QT = core
++TEMPLATE = lib
++CONFIG += staticlib
++TARGET = $$GEGLQT_LIBNAME-examples-common
++
++SOURCES += \
++    paint-engine.cpp \
++    operations.cpp \
++
++HEADERS += \
++    paint-engine.h \
++    operations.h \
++
++CONFIG += link_pkgconfig
++PKGCONFIG += $$GEGL_PKG
+diff --git a/examples/common/operations.cpp b/examples/common/operations.cpp
+new file mode 100644
+index 0000000..61984a3
+--- /dev/null
++++ b/examples/common/operations.cpp
+@@ -0,0 +1,260 @@
++#include "operations.h"
++
++#include <gegl.h>
++#include <gegl-plugin.h> // For GeglOperationClass
++
++enum ValueAttribute {
++    ValueMax,
++    ValueDefault,
++    ValueMin
++};
++
++QVariant
++getValueAttribute(ValueAttribute valueAttribute, GType valueType, GParamSpec *param_spec)
++{
++    QVariant minValue;
++    QVariant maxValue;
++    QVariant defaultValue;
++
++    if (g_type_is_a (valueType, G_TYPE_DOUBLE)) {
++        const gdouble def = G_PARAM_SPEC_DOUBLE (param_spec)->default_value;
++        const gdouble min = G_PARAM_SPEC_DOUBLE (param_spec)->minimum;
++        const gdouble max = G_PARAM_SPEC_DOUBLE (param_spec)->maximum;
++
++        defaultValue = QVariant::fromValue(def);
++        minValue = QVariant::fromValue(min);
++        maxValue = QVariant::fromValue(max);
++
++    } else if (g_type_is_a (valueType, G_TYPE_INT)) {
++        const gint def = G_PARAM_SPEC_INT (param_spec)->default_value;
++        const gint min = G_PARAM_SPEC_INT (param_spec)->minimum;
++        const gint max = G_PARAM_SPEC_INT (param_spec)->maximum;
++
++        defaultValue = QVariant::fromValue(def);
++        minValue = QVariant::fromValue(min);
++        maxValue = QVariant::fromValue(max);
++
++    } else if (g_type_is_a (valueType, G_TYPE_FLOAT)) {
++          const gfloat def = G_PARAM_SPEC_FLOAT (param_spec)->default_value;
++          const gfloat min = G_PARAM_SPEC_FLOAT (param_spec)->minimum;
++          const gfloat max = G_PARAM_SPEC_FLOAT (param_spec)->maximum;
++
++          defaultValue = QVariant::fromValue(def);
++          minValue = QVariant::fromValue(min);
++          maxValue = QVariant::fromValue(max);
++
++    } else if (g_type_is_a (valueType, G_TYPE_BOOLEAN)) {
++        const gboolean def = G_PARAM_SPEC_BOOLEAN (param_spec)->default_value;
++        defaultValue = QVariant::fromValue(def);
++
++    } else if (g_type_is_a (valueType, G_TYPE_STRING)) {
++        const gchar *string = G_PARAM_SPEC_STRING (param_spec)->default_value;
++        defaultValue = QVariant::fromValue(QString::fromUtf8(string));
++
++    } else {
++        // Unknown type
++    }
++
++    switch (valueAttribute) {
++    case ValueMax:
++        return maxValue;
++    case ValueMin:
++        return minValue;
++    case ValueDefault:
++    default:
++        return defaultValue;
++
++    }
++}
++
++QMap<QString,OperationProperty *>
++getPropertyMap(const QString &operationName)
++{
++    QMap<QString,OperationProperty *> propertyMap;
++
++    GParamSpec **properties;
++    guint prop_no;
++    guint n_properties;
++
++#if GEGL_MINOR_VERSION >= 2
++    properties = gegl_operation_list_properties(operationName.toUtf8(), &n_properties);
++#else
++    properties = gegl_list_properties(operationName.toUtf8(), &n_properties);
++#endif
++
++    for (prop_no = 0; prop_no < n_properties; prop_no++)
++    {
++        GParamSpec *param_spec = properties[prop_no];
++
++        QString name = QString::fromUtf8(g_param_spec_get_name(param_spec));
++        QString shortDescription = QString::fromUtf8(g_param_spec_get_blurb(param_spec));
++        GType valueType = G_PARAM_SPEC_VALUE_TYPE(param_spec);
++        QVariant minValue = getValueAttribute(ValueMin, valueType, param_spec);
++        QVariant maxValue = getValueAttribute(ValueMax, valueType, param_spec);
++        QVariant defaultValue = getValueAttribute(ValueDefault, valueType, param_spec);
++
++        OperationProperty *prop = new OperationProperty(name, shortDescription,
++                                                        defaultValue, minValue, maxValue);
++        propertyMap.insert(name, prop);
++    }
++    return propertyMap;
++}
++
++/* */
++QList<GeglOperationClass *> *
++getOperationsClasses(QList<GeglOperationClass *> *list, GType type)
++{
++    GeglOperationClass *klass;
++    GType *classes;
++    guint  no_children;
++    guint  no;
++
++    if (!type)
++      return list;
++
++    klass = GEGL_OPERATION_CLASS(g_type_class_ref(type));
++    if (klass->name != NULL)
++      list->append(klass);
++
++    classes = g_type_children(type, &no_children);
++
++    for (no=0; no < no_children; no++) {
++        list = getOperationsClasses(list, classes[no]);
++    }
++    if (classes) {
++        g_free(classes);
++    }
++    return list;
++}
++
++
++QMap<QString, Operation*>
++Operations::all()
++{
++    QMap<QString, Operation*> operationMap;
++
++    QList<GeglOperationClass *> *operations = new QList<GeglOperationClass *>;
++    operations = getOperationsClasses(operations, GEGL_TYPE_OPERATION);
++
++    foreach (GeglOperationClass *op_class, *operations) {
++        QString name = QString::fromUtf8(op_class->name);
++
++#if GEGL_MINOR_VERSION >= 2
++        QString categories = QString::fromUtf8(gegl_operation_get_key(op_class->name, "categories"));
++        QString description = QString::fromUtf8(gegl_operation_get_key(op_class->name, "description"));
++#else
++        QString categories = QString::fromUtf8(op_class->categories);
++        QString description = QString::fromUtf8(op_class->description);
++#endif
++
++        QStringList categoryList = categories.split(":");
++        Operation *operation = new Operation(name, description, categoryList, getPropertyMap(name));
++        operationMap.insert(name, operation);
++    }
++
++    return operationMap;
++}
++
++
++/* OperationProperty */
++OperationProperty::OperationProperty(QString name, QString description, QVariant defaultValue,
++                                     QVariant minValue, QVariant maxValue)
++    : QObject()
++    , mName(name)
++    , mShortDescription(description)
++    , mDefaultValue(defaultValue)
++    , mMinValue(minValue)
++    , mMaxValue(maxValue)
++{
++}
++
++QString OperationProperty::name()
++{
++    return mName;
++}
++
++QString OperationProperty::shortDescription()
++{
++    return mShortDescription;
++}
++
++QVariant OperationProperty::minValue()
++{
++    return mMinValue;
++}
++
++QVariant OperationProperty::maxValue()
++{
++    return mMaxValue;
++}
++
++QVariant OperationProperty::defaultValue()
++{
++    return mDefaultValue;
++}
++
++
++/* Operation */
++Operation::Operation(QString name, QString description,
++                     QStringList categoryList, QMap<QString, OperationProperty *> properties)
++    : QObject()
++    , mName(name)
++    , mCategories(categoryList)
++    , mDescription(description)
++    , mProperties(properties)
++{
++}
++
++QString Operation::name()
++{
++    return mName;
++}
++
++QString Operation::description()
++{
++    return mDescription;
++}
++
++QStringList Operation::categories()
++{
++    return mCategories;
++}
++
++QObjectList Operation::properties()
++{
++    QObjectList list;
++
++    QStringList propertyNames = mProperties.keys();
++    qSort(propertyNames);
++
++    Q_FOREACH(const QString &propertyName, propertyNames) {
++        list.append(mProperties.value(propertyName));
++    }
++
++    return list;
++}
++
++OperationsBrowser::OperationsBrowser(QObject *parent)
++    : QObject(parent)
++{
++    mAllOperations = Operations::all();
++}
++
++void OperationsBrowser::selectOperation(const QString &operationName)
++{
++    if (mSelectedOperation == operationName) {
++        return;
++    }
++    mSelectedOperation = operationName;
++    Q_EMIT selectedOperationChanged();
++}
++
++Operation *OperationsBrowser::selectedOperation()
++{
++    return mAllOperations.value(mSelectedOperation);
++}
++
++QStringList OperationsBrowser::availableOperations()
++{
++    return mAllOperations.keys();
++}
+diff --git a/examples/common/operations.h b/examples/common/operations.h
+new file mode 100644
+index 0000000..14a4952
+--- /dev/null
++++ b/examples/common/operations.h
+@@ -0,0 +1,101 @@
++#ifndef OPERATIONS_H
++#define OPERATIONS_H
++
++#include <QObject>
++#include <QtCore>
++#include <glib-object.h>
++
++/* OperationProperty:
++ *
++ * Essentially a value-type. Only a QObject in order to use properties,
++ * to be able to expose such objects to QML. */
++class OperationProperty : public QObject
++{
++    Q_OBJECT
++public:
++    explicit OperationProperty(QString name, QString description, QVariant defaultValue,
++                               QVariant minValue, QVariant maxValue);
++
++    QString name();
++    QString shortDescription();
++
++    QVariant minValue();
++    QVariant maxValue();
++    QVariant defaultValue();
++
++    Q_PROPERTY (QString name READ name CONSTANT)
++    Q_PROPERTY (QString shortDescription READ shortDescription CONSTANT)
++    Q_PROPERTY (QVariant defaultValue READ defaultValue CONSTANT)
++    Q_PROPERTY (QVariant minValue READ minValue CONSTANT)
++    Q_PROPERTY (QVariant maxValue READ minValue CONSTANT)
++
++private:
++    QString mName;
++    QString mShortDescription;
++    GType mValueType;
++    QVariant mDefaultValue;
++    QVariant mMinValue;
++    QVariant mMaxValue;
++};
++
++
++/* Operation:
++ *
++ * Essentially a value-type. Only a QObject in order to use properties,
++ * to be able to expose such objects to QML. */
++class Operation : public QObject
++{
++    Q_OBJECT
++public:
++    explicit Operation(QString name, QString description, QStringList categoryList,
++                       QMap<QString, OperationProperty *> properties);
++
++    QString name();
++    QObjectList properties();
++    QString description();
++    QStringList categories();
++
++    Q_PROPERTY (QString name READ name CONSTANT)
++    Q_PROPERTY (QObjectList properties READ properties CONSTANT)
++    Q_PROPERTY (QString description READ description CONSTANT)
++    Q_PROPERTY (QStringList categories READ categories CONSTANT)
++
++private:
++    QString mName;
++    GType mType;
++    QStringList mCategories;
++    QString mDescription;
++    QMap<QString, OperationProperty *> mProperties;
++};
++
++
++class Operations
++{
++
++public:
++    /* Return all available operations. */
++    static QMap<QString, Operation*> all();
++};
++
++class OperationsBrowser : public QObject
++{
++    Q_OBJECT
++
++public:
++    explicit OperationsBrowser(QObject *parent = 0);
++
++    Operation *selectedOperation();
++    QStringList availableOperations();
++
++    Q_INVOKABLE void selectOperation(const QString &operationName);
++    Q_SIGNAL void selectedOperationChanged();
++
++    Q_PROPERTY (QObject * selectedOperation READ selectedOperation NOTIFY selectedOperationChanged)
++    Q_PROPERTY (QStringList availableOperations READ availableOperations CONSTANT)
++
++private:
++    QString mSelectedOperation;
++    QMap<QString, Operation*> mAllOperations;
++};
++
++#endif // OPERATIONS_H
+diff --git a/examples/common/paint-engine.cpp b/examples/common/paint-engine.cpp
+new file mode 100644
+index 0000000..1baefa2
+--- /dev/null
++++ b/examples/common/paint-engine.cpp
+@@ -0,0 +1,104 @@
++/* This file is part of GEGL-QT
++ *
++ * GEGL-QT is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * GEGL-QT is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with GEGL-QT; if not, see <http://www.gnu.org/licenses/>.
++ *
++ * Copyright (C) 2011 Jon Nordby <jononor@gmail.com>
++ */
++
++#include "paint-engine.h"
++
++#include <gegl.h>
++
++/* Just holds the state used by PaintEngine. */
++struct PaintEnginePrivate
++{
++    GeglNode *graph;
++    GeglNode *outputNode;
++    GeglNode *strokeNode;
++    GeglPath *strokePath;
++    bool inStroke;
++};
++
++namespace {
++    const gchar * const DefaultColor = "black";
++    float DefaultHardness = 0.3;
++    float DefaultLineWidth = 20.0;
++}
++
++/* PaintEngine
++ * Trivial painting engine implemented using Gegl.
++ * Is not tied to QML, could be used in any toolkit. */
++PaintEngine::PaintEngine(QObject *parent)
++    : QObject(parent)
++    , priv(new PaintEnginePrivate())
++{
++    priv->graph = gegl_node_new();
++    priv->outputNode = gegl_node_new_child(priv->graph,
++                                           "operation", "gegl:nop", NULL);
++    priv->inStroke = false;
++
++}
++
++PaintEngine::~PaintEngine()
++{
++    g_object_unref(priv->graph);
++    // Nodes are owned by the graph
++    delete priv;
++}
++
++QVariant
++PaintEngine::outputNode()
++{
++    return qVariantFromValue(static_cast<void*>(priv->outputNode));
++}
++
++void
++PaintEngine::positionChanged(double x, double y, bool buttonPressed)
++{
++    if (buttonPressed && !priv->inStroke) {
++        // Start new stroke
++        GeglNode *oldStrokeNode = priv->strokeNode;
++        priv->inStroke = true;
++
++        priv->strokePath = gegl_path_new();
++        gegl_path_append (priv->strokePath, 'M', x, y);
++
++        priv->strokeNode = gegl_node_new_child(priv->graph,
++                                               "operation", "gegl:path",
++                                               "d", priv->strokePath,
++                                               "fill-opacity", 0.0,
++                                               "stroke", gegl_color_new (DefaultColor),
++                                               "stroke-width", DefaultLineWidth,
++                                               "stroke-hardness", DefaultHardness,
++                                               NULL);
++        if (oldStrokeNode) {
++            gegl_node_link_many(oldStrokeNode, priv->strokeNode, NULL);
++        }
++        gegl_node_link_many(priv->strokeNode, priv->outputNode, NULL);
++
++    } else if (buttonPressed && priv->inStroke) {
++        // Add a new point to the stroke
++        gegl_path_append(priv->strokePath, 'L', x, y, NULL);
++
++    } else if (!buttonPressed && priv->inStroke) {
++        // End stroke
++        priv->inStroke = false;
++        gegl_path_append (priv->strokePath, 'M', x, y);
++        g_object_unref (priv->strokePath);
++
++    } else if (!buttonPressed && !priv->inStroke) {
++        // Do nothing
++    }
++
++}
+diff --git a/examples/common/paint-engine.h b/examples/common/paint-engine.h
+new file mode 100644
+index 0000000..ac8751b
+--- /dev/null
++++ b/examples/common/paint-engine.h
+@@ -0,0 +1,25 @@
++#ifndef QMLPAINTENGINE_H
++#define QMLPAINTENGINE_H
++
++#include <QtCore>
++
++class PaintEnginePrivate;
++
++class PaintEngine : public QObject
++{
++    Q_OBJECT
++public:
++    explicit PaintEngine(QObject *parent = 0);
++    ~PaintEngine();
++
++    Q_INVOKABLE QVariant outputNode();
++    Q_INVOKABLE void positionChanged(double x, double y, bool buttonPressed);
++
++private:
++    void clear();
++
++private:
++    PaintEnginePrivate* priv;
++};
++
++#endif // QMLPAINTENGINE_H
+diff --git a/examples/display-operation/display-operation.cpp b/examples/display-operation/display-operation.cpp
+index 7a1e7a6..046ad39 100644
+--- a/examples/display-operation/display-operation.cpp
++++ b/examples/display-operation/display-operation.cpp
+@@ -18,7 +18,7 @@
+ 
+ #include <gegl.h>
+ 
+-#include <QtGui/QApplication>
++#include <QApplication>
+ #include <QtCore>
+ 
+ int main(int argc, char *argv[])
+diff --git a/examples/display-operation/display-operation.pro b/examples/display-operation/display-operation.pro
+index aafc229..8ad6cf2 100644
+--- a/examples/display-operation/display-operation.pro
++++ b/examples/display-operation/display-operation.pro
+@@ -1,12 +1,12 @@
+-SOURCES += display-operation.cpp
++include(../../config.pri)
+ 
+ QT += core gui
++contains(HAVE_QT_WIDGETS, yes) {
++    QT += $$QT_WIDGETS
++}
+ 
+-CONFIG += qt
+-
+-OBJECTS_DIR = .obj
+-MOC_DIR = .moc
++SOURCES += display-operation.cpp
+ 
+ # Does not link against gegl-qt as it is not used directly
+ CONFIG += link_pkgconfig
+-PKGCONFIG += gegl
++PKGCONFIG += $$GEGL_PKG
+diff --git a/examples/examples-common.pri b/examples/examples-common.pri
+index f87feac..21ee5a6 100644
+--- a/examples/examples-common.pri
++++ b/examples/examples-common.pri
+@@ -3,7 +3,10 @@ isEmpty(GEGLQT_CONFIG):error("config.pri not found")
+ 
+ QT += core gui
+ contains(HAVE_QT_DECLARATIVE, yes) {
+-    QT += declarative
++    QT += $$QT_DECLARATIVE
++}
++contains(HAVE_QT_WIDGETS, yes) {
++    QT += $$QT_WIDGETS
+ }
+ 
+ CONFIG += qt
+@@ -19,5 +22,7 @@ isEmpty(USE_EXTERNAL_GEGLQT) {
+     PKGCONFIG += $$GEGLQT_LIBNAME
+ }
+ 
++LIBS += ../../examples/common/lib$$GEGLQT_LIBNAME-examples-common.a
++
+ CONFIG += link_pkgconfig
+-PKGCONFIG += gegl
++PKGCONFIG += $$GEGL_PKG
+diff --git a/examples/examples.pro b/examples/examples.pro
+index 0c8ab3e..3f8e47a 100644
+--- a/examples/examples.pro
++++ b/examples/examples.pro
+@@ -2,19 +2,29 @@ include(../config.pri)
+ # TODO: install examples
+ 
+ TEMPLATE = subdirs
+-SUBDIRS = \
+-    qwidget-basic \
+-    qgv-basic \
+-    qwidget-transformations \
+-    qwidget-autotransform \
+-    display-operation \
++CONFIG += ordered
++SUBDIRS += \
++    common \
+ 
+-# Examples that depend on Qt Declarative (optional)
+-contains(HAVE_QT_DECLARATIVE, yes) {
++# Examples that depend on Qt Widgets (optional)
++contains(HAVE_QT_WIDGETS, yes) {
++    SUBDIRS += \
++        qwidget-basic \
++        qgv-basic \
++        qwidget-transformations \
++        qwidget-autotransform \
++        display-operation \
++
++}
++
++# Examples that depend on Qt Quick1(optional)
++contains(HAVE_QT_QUICK1, yes) {
+     SUBDIRS += \
+         qml-basic \
+         qml-paint \
+-
++        qml-operations \
+ }
+ 
+-OTHER_FILES += pyside-basic.py python-nodeviewoptions.py
++OTHER_FILES += \
++    python/basic.py \
++    python/nodeviewoptions.py \
+diff --git a/examples/qgv-basic/qgv-basic.cpp b/examples/qgv-basic/qgv-basic.cpp
+index f6dcc63..8488741 100644
+--- a/examples/qgv-basic/qgv-basic.cpp
++++ b/examples/qgv-basic/qgv-basic.cpp
+@@ -20,6 +20,8 @@
+ 
+ #include <QtGui>
+ #include <QtCore>
++#include <QGraphicsView>
++#include <QApplication>
+ 
+ using namespace GeglQt;
+ 
+diff --git a/examples/qml-operations/.gitignore b/examples/qml-operations/.gitignore
+new file mode 100644
+index 0000000..7e5b0d0
+--- /dev/null
++++ b/examples/qml-operations/.gitignore
+@@ -0,0 +1 @@
++qml-operations
+diff --git a/examples/qml-operations/OperationView.qml b/examples/qml-operations/OperationView.qml
+new file mode 100644
+index 0000000..b7acff1
+--- /dev/null
++++ b/examples/qml-operations/OperationView.qml
+@@ -0,0 +1,47 @@
++import QtQuick 1.0
++
++Rectangle {
++
++    Text {
++        height: 40
++        text: "Available operations"
++        font.pixelSize: 25
++    }
++
++    ListView {
++        id: operationsView
++        y: 50
++        height: 200
++        width: parent.width
++        model: browser.availableOperations
++        delegate: operationListDelegate
++
++        //focus: true
++    }
++
++    Component {
++        id: operationListDelegate
++
++        Rectangle {
++            id: operationListDelegateRoot
++            width: parent.width
++            height: 15
++
++            Text {
++                text: modelData
++            }
++
++            MouseArea {
++                anchors.fill: operationListDelegateRoot
++                onClicked: {
++                        console.log("clickity")
++                        operationsView.currentIndex = index
++                        browser.selectOperation(modelData)
++                }
++            }
++
++        }
++    }
++
++}
++
+diff --git a/examples/qml-operations/SingleOperationView.qml b/examples/qml-operations/SingleOperationView.qml
+new file mode 100644
+index 0000000..4dd0793
+--- /dev/null
++++ b/examples/qml-operations/SingleOperationView.qml
+@@ -0,0 +1,43 @@
++import QtQuick 1.0
++
++Rectangle {
++    id: singleOperationView
++
++    Rectangle {
++        height: 440
++        width: 250
++
++        Text {
++            height: 40
++            text: "Operation: " + browser.selectedOperation.name
++            font.pixelSize: 25
++        }
++        ListView {
++            y: 50
++            height: 400
++            width: parent.width
++
++            model: browser.selectedOperation.properties
++            delegate: propertyDelegate
++
++        }
++    }
++
++    Component {
++        id: propertyDelegate
++
++        Item {
++            height: 80
++
++            Column {
++                Text { text: modelData.name }
++                Text { text: modelData.shortDescription }
++                Text { text: modelData.defaultValue }
++                Text { text: modelData.minValue }
++                Text { text: modelData.maxValue }
++            }
++
++        }
++
++    }
++}
+diff --git a/examples/qml-operations/qml-operations.cpp b/examples/qml-operations/qml-operations.cpp
+new file mode 100644
+index 0000000..17ee688
+--- /dev/null
++++ b/examples/qml-operations/qml-operations.cpp
+@@ -0,0 +1,54 @@
++/* This file is part of GEGL-QT
++ *
++ * GEGL-QT is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 3 of the License, or (at your option) any later version.
++ *
++ * GEGL-QT is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with GEGL-QT; if not, see <http://www.gnu.org/licenses/>.
++ *
++ * Copyright (C) 2011 <jononor@gmail.com>
++ */
++
++#include <gegl-qt.h>
++
++#include <QtGui>
++#include <QtCore>
++#include <QtDeclarative>
++
++#include "../common/operations.h"
++
++int main(int argc, char *argv[])
++{ 
++    QApplication a(argc, argv);
++    gegl_init(&argc, &argv);
++    Q_INIT_RESOURCE(qmloperations);
++
++    OperationsBrowser browser;
++
++    browser.selectOperation(browser.availableOperations().at(2));
++
++    QDeclarativeView view;
++
++    view.rootContext()->setContextProperty("browser", &browser);
++
++    view.setSource(QUrl("qrc:/qml-operations.qml"));
++    view.show();
++
++    int retCode = a.exec();
++
++    // FIXME: free props
++    gegl_exit();
++    return retCode;
++}
++
++
++
++
++
+diff --git a/examples/qml-operations/qml-operations.pro b/examples/qml-operations/qml-operations.pro
+new file mode 100644
+index 0000000..b67e905
+--- /dev/null
++++ b/examples/qml-operations/qml-operations.pro
+@@ -0,0 +1,8 @@
++include(../../config.pri)
++include(../examples-common.pri)
++
++SOURCES += qml-operations.cpp
++RESOURCES += qmloperations.qrc
++OTHER_FILES += qml-operations.qml \
++    OperationView.qml \
++    SingleOperationView.qml
+diff --git a/examples/qml-operations/qml-operations.qml b/examples/qml-operations/qml-operations.qml
+new file mode 100644
+index 0000000..ee4977f
+--- /dev/null
++++ b/examples/qml-operations/qml-operations.qml
+@@ -0,0 +1,19 @@
++import QtQuick 1.0
++// import GeglQt 0.1
++
++Rectangle {
++    width: 500
++    height: 500
++
++    OperationView {
++        id: operationsList
++        width: 300 // parent.width / 0.6
++    }
++
++    SingleOperationView {
++        id: singleOperation
++        width: 200 // parent.width / 0.4
++        anchors.left: operationsList.right
++    }
++
++}
+diff --git a/examples/qml-operations/qmloperations.qrc b/examples/qml-operations/qmloperations.qrc
+new file mode 100644
+index 0000000..492a3c4
+--- /dev/null
++++ b/examples/qml-operations/qmloperations.qrc
+@@ -0,0 +1,7 @@
++<RCC>
++    <qresource prefix="/">
++        <file>qml-operations.qml</file>
++        <file>SingleOperationView.qml</file>
++        <file>OperationView.qml</file>
++    </qresource>
++</RCC>
+diff --git a/examples/qml-paint/qml-paint-engine.cpp b/examples/qml-paint/qml-paint-engine.cpp
+deleted file mode 100644
+index 7837df1..0000000
+--- a/examples/qml-paint/qml-paint-engine.cpp
++++ /dev/null
+@@ -1,104 +0,0 @@
+-/* This file is part of GEGL-QT
+- *
+- * GEGL-QT is free software; you can redistribute it and/or
+- * modify it under the terms of the GNU Lesser General Public
+- * License as published by the Free Software Foundation; either
+- * version 3 of the License, or (at your option) any later version.
+- *
+- * GEGL-QT is distributed in the hope that it will be useful,
+- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+- * Lesser General Public License for more details.
+- *
+- * You should have received a copy of the GNU Lesser General Public
+- * License along with GEGL-QT; if not, see <http://www.gnu.org/licenses/>.
+- *
+- * Copyright (C) 2011 Jon Nordby <jononor@gmail.com>
+- */
+-
+-#include "qml-paint-engine.h"
+-
+-#include <gegl.h>
+-
+-/* Just holds the state used by PaintEngine. */
+-struct PaintEnginePrivate
+-{
+-    GeglNode *graph;
+-    GeglNode *outputNode;
+-    GeglNode *strokeNode;
+-    GeglPath *strokePath;
+-    bool inStroke;
+-};
+-
+-namespace {
+-    const gchar * const DefaultColor = "black";
+-    float DefaultHardness = 0.3;
+-    float DefaultLineWidth = 20.0;
+-}
+-
+-/* PaintEngine
+- * Trivial painting engine implemented using Gegl.
+- * Is not tied to QML, could be used in any toolkit. */
+-PaintEngine::PaintEngine(QObject *parent)
+-    : QObject(parent)
+-    , priv(new PaintEnginePrivate())
+-{
+-    priv->graph = gegl_node_new();
+-    priv->outputNode = gegl_node_new_child(priv->graph,
+-                                           "operation", "gegl:nop", NULL);
+-    priv->inStroke = false;
+-
+-}
+-
+-PaintEngine::~PaintEngine()
+-{
+-    g_object_unref(priv->graph);
+-    // Nodes are owned by the graph
+-    delete priv;
+-}
+-
+-QVariant
+-PaintEngine::outputNode()
+-{
+-    return qVariantFromValue(static_cast<void*>(priv->outputNode));
+-}
+-
+-void
+-PaintEngine::positionChanged(double x, double y, bool buttonPressed)
+-{
+-    if (buttonPressed && !priv->inStroke) {
+-        // Start new stroke
+-        GeglNode *oldStrokeNode = priv->strokeNode;
+-        priv->inStroke = true;
+-
+-        priv->strokePath = gegl_path_new();
+-        gegl_path_append (priv->strokePath, 'M', x, y);
+-
+-        priv->strokeNode = gegl_node_new_child(priv->graph,
+-                                               "operation", "gegl:path",
+-                                               "d", priv->strokePath,
+-                                               "fill-opacity", 0.0,
+-                                               "stroke", gegl_color_new (DefaultColor),
+-                                               "stroke-width", DefaultLineWidth,
+-                                               "stroke-hardness", DefaultHardness,
+-                                               NULL);
+-        if (oldStrokeNode) {
+-            gegl_node_link_many(oldStrokeNode, priv->strokeNode, NULL);
+-        }
+-        gegl_node_link_many(priv->strokeNode, priv->outputNode, NULL);
+-
+-    } else if (buttonPressed && priv->inStroke) {
+-        // Add a new point to the stroke
+-        gegl_path_append(priv->strokePath, 'L', x, y, NULL);
+-
+-    } else if (!buttonPressed && priv->inStroke) {
+-        // End stroke
+-        priv->inStroke = false;
+-        gegl_path_append (priv->strokePath, 'M', x, y);
+-        g_object_unref (priv->strokePath);
+-
+-    } else if (!buttonPressed && !priv->inStroke) {
+-        // Do nothing
+-    }
+-
+-}
+diff --git a/examples/qml-paint/qml-paint-engine.h b/examples/qml-paint/qml-paint-engine.h
+deleted file mode 100644
+index ac8751b..0000000
+--- a/examples/qml-paint/qml-paint-engine.h
++++ /dev/null
+@@ -1,25 +0,0 @@
+-#ifndef QMLPAINTENGINE_H
+-#define QMLPAINTENGINE_H
+-
+-#include <QtCore>
+-
+-class PaintEnginePrivate;
+-
+-class PaintEngine : public QObject
+-{
+-    Q_OBJECT
+-public:
+-    explicit PaintEngine(QObject *parent = 0);
+-    ~PaintEngine();
+-
+-    Q_INVOKABLE QVariant outputNode();
+-    Q_INVOKABLE void positionChanged(double x, double y, bool buttonPressed);
+-
+-private:
+-    void clear();
+-
+-private:
+-    PaintEnginePrivate* priv;
+-};
+-
+-#endif // QMLPAINTENGINE_H
+diff --git a/examples/qml-paint/qml-paint.cpp b/examples/qml-paint/qml-paint.cpp
+index c3d6756..3747b01 100644
+--- a/examples/qml-paint/qml-paint.cpp
++++ b/examples/qml-paint/qml-paint.cpp
+@@ -16,7 +16,7 @@
+  * Copyright (C) 2011 Jon Nordby <jononor@gmail.com>
+  */
+ 
+-#include "qml-paint-engine.h"
++#include "../common/paint-engine.h"
+ 
+ #include <gegl-qt.h>
+ #include <gegl-qt-declarative.h>
+diff --git a/examples/qml-paint/qml-paint.pro b/examples/qml-paint/qml-paint.pro
+index c282761..177f39b 100644
+--- a/examples/qml-paint/qml-paint.pro
++++ b/examples/qml-paint/qml-paint.pro
+@@ -1,7 +1,7 @@
+ include(../../config.pri)
+ include(../examples-common.pri)
+ 
+-SOURCES += qml-paint.cpp qml-paint-engine.cpp
+-HEADERS += qml-paint-engine.h
++SOURCES += qml-paint.cpp
++HEADERS +=
+ RESOURCES += qmlpaint.qrc
+ OTHER_FILES += qml-paint.qml
+diff --git a/examples/qwidget-autotransform/autotransform-controls.cpp b/examples/qwidget-autotransform/autotransform-controls.cpp
+index caee8ca..b9d1df2 100644
+--- a/examples/qwidget-autotransform/autotransform-controls.cpp
++++ b/examples/qwidget-autotransform/autotransform-controls.cpp
+@@ -18,6 +18,8 @@
+ 
+ #include "autotransform-controls.h"
+ 
++#include <QCheckBox>
++#include <QBoxLayout>
+ 
+ AutoTransformControls::AutoTransformControls(QWidget *parent) :
+     QWidget(parent)
+diff --git a/examples/qwidget-autotransform/autotransform-controls.h b/examples/qwidget-autotransform/autotransform-controls.h
+index f2f69d2..c714246 100644
+--- a/examples/qwidget-autotransform/autotransform-controls.h
++++ b/examples/qwidget-autotransform/autotransform-controls.h
+@@ -3,6 +3,9 @@
+ 
+ #include <QtGui>
+ #include <gegl-qt/nodeviewoptions.h>
++#include <QWidget>
++
++class QCheckBox;
+ 
+ using namespace GeglQt;
+ 
+diff --git a/examples/qwidget-autotransform/qwidget-autotransform.cpp b/examples/qwidget-autotransform/qwidget-autotransform.cpp
+index 8ad29d9..70ca365 100644
+--- a/examples/qwidget-autotransform/qwidget-autotransform.cpp
++++ b/examples/qwidget-autotransform/qwidget-autotransform.cpp
+@@ -19,8 +19,9 @@
+ #include <gegl-qt.h>
+ #include "autotransform-controls.h"
+ 
+-#include <QtGui/QApplication>
++#include <QApplication>
+ #include <QtCore>
++#include <QBoxLayout>
+ 
+ using namespace GeglQt;
+ 
+diff --git a/examples/qwidget-basic/qwidget-basic.cpp b/examples/qwidget-basic/qwidget-basic.cpp
+index 22cce16..14a59a8 100644
+--- a/examples/qwidget-basic/qwidget-basic.cpp
++++ b/examples/qwidget-basic/qwidget-basic.cpp
+@@ -18,7 +18,7 @@
+ 
+ #include <gegl-qt.h>
+ 
+-#include <QtGui/QApplication>
++#include <QApplication>
+ #include <QtCore>
+ 
+ using namespace GeglQt;
+diff --git a/examples/qwidget-transformations/qwidget-transformations.cpp b/examples/qwidget-transformations/qwidget-transformations.cpp
+index 9d93cc4..78f3fc7 100644
+--- a/examples/qwidget-transformations/qwidget-transformations.cpp
++++ b/examples/qwidget-transformations/qwidget-transformations.cpp
+@@ -20,8 +20,9 @@
+ 
+ #include "transformation-controls.h"
+ 
+-#include <QtGui/QApplication>
++#include <QApplication>
+ #include <QtCore>
++#include <QBoxLayout>
+ 
+ int main(int argc, char *argv[])
+ {
+diff --git a/examples/qwidget-transformations/transformation-controls.cpp b/examples/qwidget-transformations/transformation-controls.cpp
+index 9978ec6..70bd697 100644
+--- a/examples/qwidget-transformations/transformation-controls.cpp
++++ b/examples/qwidget-transformations/transformation-controls.cpp
+@@ -18,6 +18,9 @@
+ 
+ #include "transformation-controls.h"
+ 
++#include <QDoubleSpinBox>
++#include <QBoxLayout>
++
+ TransformationControls::TransformationControls(QWidget *parent) :
+     QWidget(parent)
+ {
+diff --git a/examples/qwidget-transformations/transformation-controls.h b/examples/qwidget-transformations/transformation-controls.h
+index 7dfe553..e2bfb57 100644
+--- a/examples/qwidget-transformations/transformation-controls.h
++++ b/examples/qwidget-transformations/transformation-controls.h
+@@ -1,9 +1,12 @@
+ #ifndef TRANSFORMATIONCONTROLS_H
+ #define TRANSFORMATIONCONTROLS_H
+ 
++#include <gegl-qt/nodeviewoptions.h>
++
+ #include <QtGui>
++#include <QWidget>
+ 
+-#include <gegl-qt/nodeviewoptions.h>
++class QDoubleSpinBox;
+ 
+ using namespace GeglQt;
+ 
+diff --git a/gegl-qt.pro b/gegl-qt.pro
+index c76d789..b9771a2 100644
+--- a/gegl-qt.pro
++++ b/gegl-qt.pro
+@@ -10,17 +10,16 @@ isEmpty(USE_EXTERNAL_GEGLQT) {
+     contains(HAVE_PYSIDE, yes) {
+         SUBDIRS += pygegl-qt
+     }
+-    SUBDIRS += operations plugins doc
++    contains(HAVE_QT_WIDGETS, yes) {
++        SUBDIRS += operations
++    }
++    SUBDIRS +=  plugins doc
+ 
+ } else {
+     !system(pkg-config --exists $$GEGLQT_LIBNAME):error("Could not find required dependency: GEGL-QT")
+ }
+ SUBDIRS += examples tests
+ 
+-# Check hard deps
+-!system(pkg-config --exists gegl):error("Could not find required dependency: GEGL")
+-
+-
+ ### Extra targets for distribution ###
+ 
+ DIST_NAME = $$GEGLQT_PROJECTNAME-$$GEGLQT_VERSION
+@@ -40,7 +39,7 @@ dist.commands += git archive HEAD --prefix=$$DIST_NAME/ | bzip2 > $$TARBALL_PATH
+ # Creates a tarball release, extracts it, builds, runs tests and installs
+ QMAKE_EXTRA_TARGETS += distcheck
+ distcheck.target = distcheck
+-distcheck.depends += dist;
++distcheck.depends += dist
+ distcheck.commands += mkdir -p $$OUT_PWD/distcheck-build;
+ distcheck.commands += cd $$OUT_PWD/distcheck-build;
+ distcheck.commands += tar -xf $$TARBALL_PATH;
+diff --git a/gegl-qt/GeglQtWidgets b/gegl-qt/GeglQtWidgets
+new file mode 100644
+index 0000000..70644ff
+--- /dev/null
++++ b/gegl-qt/GeglQtWidgets
+@@ -0,0 +1 @@
++#include <gegl-qt-widgets.h>
+diff --git a/gegl-qt/gegl-qt-widgets.h b/gegl-qt/gegl-qt-widgets.h
+new file mode 100644
+index 0000000..f00b6ee
+--- /dev/null
++++ b/gegl-qt/gegl-qt-widgets.h
+@@ -0,0 +1,7 @@
++#ifndef GEGLQTWIDGETS_H
++#define GEGLQTWIDGETS_H
++
++#include <gegl-qt/nodeviewwidget.h>
++#include <gegl-qt/nodeviewgraphicswidget.h>
++
++#endif // GEGLQTWIDGETS_H
+diff --git a/gegl-qt/gegl-qt.h b/gegl-qt/gegl-qt.h
+index d811b86..facf100 100644
+--- a/gegl-qt/gegl-qt.h
++++ b/gegl-qt/gegl-qt.h
+@@ -1,10 +1,51 @@
+ #ifndef GEGLQT_H
+ #define GEGLQT_H
+ 
++/*!
++ * \mainpage
++ *
++ * gegl-qt is an integration library for using GEGL in Qt-based applications.
++ *
++ * All recent versions of Qt4, possibly as far down as 4.2, are supported,
++ * and all the different widget-paradims; QWidget, QGraphicsView and Qt Quick.
++ *
++ * gegl-qt can be used directly from C++, or from QML when build with Qt Quick,
++ * or from Python when built with PySide. For usage examples, see
++ * http://git.gnome.org/browse/gegl-qt/tree/examples
++ *
++ * gegl-qt is licensed under the GNU LGPL v3+ and is maintained by Jon Nordby
++ *
++ * - Homepage: http://www.gegl.org/gegl-qt
++ * - Bugtracker: http://bugzilla.gnome.org, product: GEGL, component: gegl-qt
++ * - Code: http://git.gnome.org/browse/gegl-qt/
++ * - Mailinglist: http://mail.gnome.org/mailman/listinfo/gegl-developer-list
++ *
++ * For information on how to build, see the README.txt file in the source code.
++ *
++ * \section Widgets
++ * gegl-qt currently provides one type of widget, a NodeView. It shows the output of a GeglNode.
++ *
++ * - For QGraphicsView: GeglQt::NodeViewGraphicsWidget
++ * - For Qt Quick: GeglQt::NodeViewDeclarativeItem
++ * - For QWidget: GeglQt::NodeViewWidget
++ */
++
++/*!
++ * \namespace GeglQt
++ *
++ * \brief Main namespace for gegl-qt
++ *
++ */
++
+ // Node Views
+ #include <gegl-qt/nodeviewoptions.h>
+ 
++// Code requiring QtWidgets
++// FIXME: don't include when not build with widgets
+ #include <gegl-qt/nodeviewwidget.h>
+ #include <gegl-qt/nodeviewgraphicswidget.h>
+ 
++// Code requiring QtDeclarative is found in the
++// gegl-qt-declarative.h header
++
+ #endif // GEGLQT_H
+diff --git a/gegl-qt/gegl-qt.pro b/gegl-qt/gegl-qt.pro
+index cda2b3b..f396a05 100644
+--- a/gegl-qt/gegl-qt.pro
++++ b/gegl-qt/gegl-qt.pro
+@@ -9,41 +9,66 @@ VERSION = $$GEGLQT_VERSION
+ 
+ QT += core gui
+ contains(HAVE_QT_DECLARATIVE, yes) {
+-    QT += declarative
++    QT += $$QT_DECLARATIVE
++}
++contains(HAVE_QT_WIDGETS, yes) {
++    QT += $$QT_WIDGETS
+ }
+ 
+ CONFIG += link_pkgconfig
+-PKGCONFIG += gegl
++PKGCONFIG += $$GEGL_PKG
+ 
+ OBJECTS_DIR = .obj
+ MOC_DIR = .moc
+ 
+ PUBLIC_SOURCES += \
+-    nodeviewwidget.cpp \
+-    nodeviewgraphicswidget.cpp \
+     nodeviewoptions.cpp \
+ 
++PUBLIC_HEADERS += \
++    nodeviewoptions.h \
++
+ TOP_HEADERS += gegl-qt.h GeglQt
+ 
+-PUBLIC_HEADERS = \
+-    nodeviewwidget.h \
+-    nodeviewgraphicswidget.h \
+-    nodeviewoptions.h \
++#PRIVATE_HEADERS += \
++
++#PRIVATE_SOURCES += \
++
++contains(HAVE_QT_WIDGETS, yes) {
++    PUBLIC_SOURCES += \
++        nodeviewwidget.cpp \
++        nodeviewgraphicswidget.cpp \
++
++    PUBLIC_HEADERS += \
++        nodeviewwidget.h \
++        nodeviewgraphicswidget.h \
++
++    # FIXME: remove QtWidgets dependency from NodeViewImplementation
++    PRIVATE_HEADERS += \
++        internal/nodeviewimplementation.h \
++        internal/nodeviewchilditem.h \
++
++    PRIVATE_SOURCES += \
++        internal/nodeviewimplementation.cpp \
++        internal/nodeviewchilditem.cpp \
++
++    TOP_HEADERS += gegl-qt-widgets.h GeglQtWidgets
++}
+ 
+ # Code that depends on Qt Declarative (optional)
+ contains(HAVE_QT_DECLARATIVE, yes) {
+-    PUBLIC_HEADERS += nodeviewdeclarativeitem.h
+-    PUBLIC_SOURCES += nodeviewdeclarativeitem.cpp
+-    TOP_HEADERS += gegl-qt-declarative.h GeglQtDeclarative
+-}
+ 
+-PRIVATE_HEADERS = \
+-    internal/nodeviewimplementation.h \
+-    internal/nodeviewchilditem.h \
++    contains(QT_MAJOR_VERSION, 5) {
++        #PUBLIC_HEADERS +=
++        #PUBLIC_SOURCES +=
++    }
++
++    contains(HAVE_QT_QUICK1, yes) {
++        PUBLIC_HEADERS += nodeviewdeclarativeitem.h
++        PUBLIC_SOURCES += nodeviewdeclarativeitem.cpp
++    }
+ 
+-PRIVATE_SOURCES = \
+-    internal/nodeviewimplementation.cpp \
+-    internal/nodeviewchilditem.cpp \
++    TOP_HEADERS += gegl-qt-declarative.h GeglQtDeclarative
++}
+ 
+ SOURCES += $$PUBLIC_SOURCES $$PRIVATE_SOURCES
+ 
+@@ -60,16 +85,16 @@ private_headers.path = $$GEGLQT_INSTALL_HEADERS/$$GEGLQT_LIBNAME/$$GEGLQT_PROJEC
+ top_headers.path = $$GEGLQT_INSTALL_HEADERS/$$GEGLQT_LIBNAME
+ top_headers.files = $$TOP_HEADERS
+ 
+-outputFiles(gegl-qt4-0.1.pc)
++outputFiles(gegl-qt$$QT_MAJOR_VERSION-$${GEGLQT_API_VERSION}.pc)
+ 
+ pkgconfig.path = $$GEGLQT_INSTALL_LIBS/pkgconfig
+-pkgconfig.files = gegl-qt4-0.1.pc
++pkgconfig.files = gegl-qt$$QT_MAJOR_VERSION-$${GEGLQT_API_VERSION}.pc
+ 
+ INSTALLS += target headers top_headers pkgconfig
+ !isEmpty(GEGLQT_INSTALL_PRIVATE_HEADERS) {
+     INSTALLS += private_headers
+ }
+ 
+-OTHER_FILES = \
+-    gegl-qt4-0.1.pc.in \
++OTHER_FILES += \
++    gegl-qt$$QT_MAJOR_VERSION-$${GEGLQT_API_VERSION}.pc.in \
+ 
+diff --git a/gegl-qt/gegl-qt4-0.1.pc.in b/gegl-qt/gegl-qt4-0.1.pc.in
+index a663f55..820f5d4 100644
+--- a/gegl-qt/gegl-qt4-0.1.pc.in
++++ b/gegl-qt/gegl-qt4-0.1.pc.in
+@@ -6,7 +6,7 @@ includedir=@GEGLQT_INSTALL_HEADERS@
+ Name: GEGL-QT
+ Description: Convenience library for using Gegl in Qt applications
+ Version: @GEGLQT_VERSION@
+-Requires: gegl @GEGLQT_DECLARATIVE_PKGCONFIG@ QtGui
++Requires: @GEGL_PKG@ @GEGLQT_DECLARATIVE_PKGCONFIG@ QtGui
+ Cflags: -I${includedir}/@GEGLQT_LIBNAME@
+ Libs: -L${libdir} -l@GEGLQT_LIBNAME@
+ 
+diff --git a/gegl-qt/gegl-qt5-0.1.pc.in b/gegl-qt/gegl-qt5-0.1.pc.in
+new file mode 100644
+index 0000000..820f5d4
+--- /dev/null
++++ b/gegl-qt/gegl-qt5-0.1.pc.in
+@@ -0,0 +1,12 @@
++prefix=@GEGLQT_INSTALL_PREFIX@
++exec_prefix=@GEGLQT_INSTALL_PREFIX@
++libdir=@GEGLQT_INSTALL_LIBS@
++includedir=@GEGLQT_INSTALL_HEADERS@
++
++Name: GEGL-QT
++Description: Convenience library for using Gegl in Qt applications
++Version: @GEGLQT_VERSION@
++Requires: @GEGL_PKG@ @GEGLQT_DECLARATIVE_PKGCONFIG@ QtGui
++Cflags: -I${includedir}/@GEGLQT_LIBNAME@
++Libs: -L${libdir} -l@GEGLQT_LIBNAME@
++
+diff --git a/gegl-qt/internal/nodeviewchilditem.cpp b/gegl-qt/internal/nodeviewchilditem.cpp
+index a119170..4a0aede 100644
+--- a/gegl-qt/internal/nodeviewchilditem.cpp
++++ b/gegl-qt/internal/nodeviewchilditem.cpp
+@@ -20,6 +20,7 @@
+ #include "internal/nodeviewimplementation.h"
+ 
+ #include <QtDebug> // TEMP
++#include <QStyleOptionGraphicsItem>
+ 
+ using namespace GeglQt;
+ 
+diff --git a/gegl-qt/internal/nodeviewimplementation.cpp b/gegl-qt/internal/nodeviewimplementation.cpp
+index e0364ec..784632c 100644
+--- a/gegl-qt/internal/nodeviewimplementation.cpp
++++ b/gegl-qt/internal/nodeviewimplementation.cpp
+@@ -108,7 +108,7 @@ NodeViewImplementation::~NodeViewImplementation()
+ {
+     delete timer;
+     if (processor) {
+-        gegl_processor_destroy(processor);
++        g_object_unref(processor);
+     }
+     delete mOptions;
+     delete mChildItem;
+@@ -133,7 +133,7 @@ NodeViewImplementation::setInputNode(GeglNode *node)
+         g_object_unref(mInputNode);
+     }
+     if (processor) {
+-        gegl_processor_destroy(processor);
++        g_object_unref(processor);
+         processor = 0;
+     }
+ 
+@@ -167,8 +167,7 @@ NodeViewImplementation::setOptions(NodeViewOptions *newOptions)
+         return;
+     }
+ 
+-    /* FIXME: Don't take complete ownership of the options instance.
+-     * Use refcounting instead? */
++    /* XXX: Don't take complete ownership of the options instance, use QSharedPointer instead? */
+     delete mOptions;
+     mOptions = newOptions ? newOptions : new NodeViewOptions();
+ 
+@@ -319,7 +318,7 @@ NodeViewImplementation::paint(QPainter *painter, const QRectF & viewRect)
+     guchar *buffer = NULL;
+     GeglRectangle roi;
+ 
+-    Babl *format = babl_format("B'aG'aR'aA u8");
++    const Babl *format = babl_format("B'aG'aR'aA u8");
+ 
+     if (!format) {
+         qCritical() << "Unknown Babl format";
+diff --git a/gegl-qt/internal/nodeviewimplementation.h b/gegl-qt/internal/nodeviewimplementation.h
+index 02eaac9..e25d390 100644
+--- a/gegl-qt/internal/nodeviewimplementation.h
++++ b/gegl-qt/internal/nodeviewimplementation.h
+@@ -19,11 +19,13 @@
+  * Copyright (C) 2011 Jon Nordby <jononor@gmail.com>
+  */
+ 
+-#include <Qt/QtGui>
++#include <QtGui>
+ #include <gegl.h>
+ 
+ #include <gegl-qt/nodeviewoptions.h>
+ 
++class QGraphicsItem;
++
+ namespace GeglQt {
+ 
+ class NodeViewChildItem;
+diff --git a/gegl-qt/nodeviewdeclarativeitem.cpp b/gegl-qt/nodeviewdeclarativeitem.cpp
+index d60683c..7a25f18 100644
+--- a/gegl-qt/nodeviewdeclarativeitem.cpp
++++ b/gegl-qt/nodeviewdeclarativeitem.cpp
+@@ -104,7 +104,7 @@ NodeViewDeclarativeItem::paint(QPainter *painter,
+                              QWidget *widget)
+ {
+     // Handled by private class
+-    Q_UNUSED(widget);
++    Q_UNUSED(painter);
+     Q_UNUSED(option);
+     Q_UNUSED(widget);
+ }
+diff --git a/gegl-qt/nodeviewdeclarativeitem.h b/gegl-qt/nodeviewdeclarativeitem.h
+index a844643..ee6e544 100644
+--- a/gegl-qt/nodeviewdeclarativeitem.h
++++ b/gegl-qt/nodeviewdeclarativeitem.h
+@@ -20,6 +20,7 @@
+  */
+ 
+ #include <QtDeclarative>
++#include <QDeclarativeItem>
+ #include <QtCore>
+ #include <gegl.h>
+ 
+@@ -31,6 +32,12 @@ namespace GeglQt {
+ 
+ class NodeViewImplementation;
+ 
++/*!
++ * QDeclarativeItem showing the output of a GeglNode
++ *
++ * Typically used from QML, but can also be instantiated by C++.
++ */
++
+ class NodeViewDeclarativeItem : public QDeclarativeItem
+ {
+     Q_OBJECT
+@@ -38,24 +45,40 @@ public:
+     explicit NodeViewDeclarativeItem(QDeclarativeItem *parent = 0);
+     ~NodeViewDeclarativeItem();
+ 
+-    // QVariant is used so that GeglNode* can be passed through QML
+-    void setInputNodeVariant(QVariant node);
+-    QVariant inputNodeVariant();
+-
+-    void setInputNode(GeglNodePtr node);
++    /*! The node this widget displays.
++     * \return The GeglNode
++     */
+     GeglNodePtr inputNode();
+ 
+-    Q_PROPERTY(QVariant inputNode READ inputNodeVariant WRITE setInputNodeVariant NOTIFY inputNodeChanged)
++    /*! Set the node to display
++     * \param node The GeglNode to display, or 0 to unset
++     *
++     * Will reference the GeglNode.
++     */
++    void setInputNode(GeglNodePtr node);
+ 
++    /*! The options used on this widget. */
+     GeglQt::NodeViewOptions *options() const;
++
++    //! \internal
+     void setOptions(GeglQt::NodeViewOptions* newOptions);
+ 
+     Q_PROPERTY(GeglQt::NodeViewOptions * options READ options WRITE setOptions NOTIFY optionsChanged)
+ 
+-    //! reimpl
++    // QVariant is used so that GeglNode* can be passed through QML
++    //! \internal
++    void setInputNodeVariant(QVariant node);
++    //! \internal
++    QVariant inputNodeVariant();
++
++    Q_PROPERTY(QVariant inputNode READ inputNodeVariant WRITE setInputNodeVariant NOTIFY inputNodeChanged)
++
++public:
++    //! \internal
+     void geometryChanged(const QRectF & newGeometry, const QRectF & oldGeometry);
++
++    //! \internal
+     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
+-    //! reimpl end
+ 
+ Q_SIGNALS:
+     void inputNodeChanged();
+diff --git a/gegl-qt/nodeviewgraphicswidget.h b/gegl-qt/nodeviewgraphicswidget.h
+index 7df37fe..da644b7 100644
+--- a/gegl-qt/nodeviewgraphicswidget.h
++++ b/gegl-qt/nodeviewgraphicswidget.h
+@@ -30,6 +30,10 @@ namespace GeglQt {
+ 
+ class NodeViewImplementation;
+ 
++/*!
++ * QGraphicsWidget showing the output of a GeglNode
++ */
++
+ class NodeViewGraphicsWidget : public QGraphicsWidget
+ {
+     Q_OBJECT
+@@ -37,14 +41,24 @@ public:
+     explicit NodeViewGraphicsWidget(QGraphicsItem *parent = 0);
+     ~NodeViewGraphicsWidget();
+ 
+-    void setInputNode(GeglNodePtr node);
++    /*! The node this widget displays.
++     * \return The GeglNode
++     */
+     GeglNodePtr inputNode();
+ 
++    /*! Set the node to display
++     * \param node The GeglNode to display, or 0 to unset
++     *
++     * Will reference the GeglNode.
++     */
++    void setInputNode(GeglNodePtr node);
++
++    /*! The options used on this widget. */
+     GeglQt::NodeViewOptions *options() const;
+ 
+-    //! reimpl
++public:
++    //! \internal
+     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
+-    //! reimpl end
+ 
+ private Q_SLOTS:
+     void invalidate(QRectF rect);
+diff --git a/gegl-qt/nodeviewoptions.cpp b/gegl-qt/nodeviewoptions.cpp
+index 4620b43..62d771c 100644
+--- a/gegl-qt/nodeviewoptions.cpp
++++ b/gegl-qt/nodeviewoptions.cpp
+@@ -31,34 +31,7 @@ struct GeglQtViewOptionsPrivate {
+     NodeViewOptions::AutoScale autoScale;
+ };
+ 
+-/*
+-  TODO: support more options
+-
+-  double rotation;
+-*/
+-
+-
+-/* FIXME: find a better name? */
+-/* TODO: evaluate what is the best behavior when the Auto options are enabled,
+- * and trying to use the manual setters as well.
+- *
+- * Currently enabling autoCenter/autoScaling means that
+- * - The view implementation will change the scale/translation values
+- * - Using the manual setters will set the value, but it will be overwritten as soon
+- * the auto value update is triggered (by viewport/model changes, et.c)
+- *
+- * A challenge is that GeglQtViewImplementation should still be able to set the values
+- * when autocenter/autoscale is enabled.
+- *
+- * Possible behaviors include
+- * 0. Ignoring values from explicit setters
+- * Suprising that when toggling auto enable/disable, the previously manually set values will be gone?
+- * 1. Setting scale/translation manually will quit auto mode.
+- * Could be suprising if one accidentically calls it?
+- * 2. Allowing one to set scale/translation manually, but they are overridden when auto mode is on
+- * Suprising that calling setSomething(), and then something() would not return the same value;
+- * or that scale() returns a different value from the current transformation (and that transformation() indicates)
+- */
++/* TODO: support rotation */
+ NodeViewOptions::NodeViewOptions(QObject *parent)
+     : QObject(parent)
+     , priv(new GeglQtViewOptionsPrivate())
+diff --git a/gegl-qt/nodeviewoptions.h b/gegl-qt/nodeviewoptions.h
+index a50c1b1..3e3a30d 100644
+--- a/gegl-qt/nodeviewoptions.h
++++ b/gegl-qt/nodeviewoptions.h
+@@ -26,6 +26,15 @@ class GeglQtViewOptionsPrivate;
+ namespace GeglQt
+ {
+ 
++/*!
++ * Options available for NodeView widgets
++ *
++ * Note: when enabling autoCenter/autoScaling the values for translation/scale
++ * will be automatically managed. Values set manually will be overwritten.
++ *
++ * \sa NodeViewWidget, NodeViewGraphicsWidget, NodeViewDeclarativeItem
++ */
++
+ class NodeViewOptions : public QObject
+ {
+     Q_OBJECT
+diff --git a/gegl-qt/nodeviewwidget.cpp b/gegl-qt/nodeviewwidget.cpp
+index e7643dd..967cee1 100644
+--- a/gegl-qt/nodeviewwidget.cpp
++++ b/gegl-qt/nodeviewwidget.cpp
+@@ -19,7 +19,7 @@
+ #include "nodeviewwidget.h"
+ #include "internal/nodeviewimplementation.h"
+ 
+-#include <Qt/QtGui>
++#include <QtGui>
+ #include <QtDebug>
+ 
+ using namespace GeglQt;
+@@ -84,7 +84,7 @@ NodeViewWidget::viewportSizeChangeRequested(QSizeF requestedSize)
+     resize(requestedSize.toSize());
+ }
+ 
+-//! \brief Draw the view of GeglNode onto the widget
++// Draw the view of GeglNode onto the widget
+ void
+ NodeViewWidget::paintEvent(QPaintEvent *event)
+ {
+diff --git a/gegl-qt/nodeviewwidget.h b/gegl-qt/nodeviewwidget.h
+index 7ecf66b..d755dc4 100644
+--- a/gegl-qt/nodeviewwidget.h
++++ b/gegl-qt/nodeviewwidget.h
+@@ -19,7 +19,7 @@
+  * Copyright (C) 2011 Jon Nordby <jononor@gmail.com>
+  */
+ 
+-#include <QtGui/QWidget>
++#include <QWidget>
+ #include <gegl.h>
+ 
+ #include <gegl-qt/nodeviewoptions.h>
+@@ -30,6 +30,10 @@ namespace GeglQt {
+ 
+ class NodeViewImplementation;
+ 
++/*!
++ * QWidget showing the output of a GeglNode
++ */
++
+ class NodeViewWidget : public QWidget
+ {
+     Q_OBJECT
+@@ -38,15 +42,27 @@ public:
+     NodeViewWidget(QWidget *parent = 0);
+     ~NodeViewWidget();
+ 
++    /*! The node this widget displays.
++     * \return The GeglNode
++     */
+     GeglNodePtr inputNode() const;
++
++    /*! Set the node to display
++     * \param node The GeglNode to display, or 0 to unset
++     *
++     * Will reference the GeglNode.
++     */
+     void setInputNode(GeglNodePtr node);
+ 
++    /*! The options used on this widget. */
+     GeglQt::NodeViewOptions *options() const;
+ 
+-    //! \reimpl
++public:
++    //! \internal
+     virtual void paintEvent(QPaintEvent *event);
++
++    //! \internal
+     virtual void resizeEvent(QResizeEvent *event);
+-    //! \reimpl end
+ 
+ private Q_SLOTS:
+     void invalidate(QRectF rect);
+diff --git a/operations/geglqtdisplay.cpp b/operations/geglqtdisplay.cpp
+index af8270b..71d5d64 100644
+--- a/operations/geglqtdisplay.cpp
++++ b/operations/geglqtdisplay.cpp
+@@ -105,9 +105,17 @@ gegl_chant_class_init (GeglChantClass *klass)
+   operation_class->attach = attach;
+   G_OBJECT_CLASS (klass)->dispose = dispose;
+ 
+-  operation_class->name        = "gegl-qt4:display";
++#if GEGL_MINOR_VERSION >= 2 && GEGL_MICRO_VERSION >= 0
++  gegl_operation_class_set_keys (operation_class,
++      "name", GEGLQT_OPERATION_PREFIX":display",
++      "categories", "output",
++      "description", "Displays the input buffer in a Qt window .",
++      NULL);
++#else /* GEGL < 0.2.0 */
++  operation_class->name        = GEGLQT_OPERATION_PREFIX":display";
+   operation_class->categories  = "output";
+   operation_class->description = "Displays the input buffer in a Qt window.";
++#endif
+ }
+ 
+ #endif
+diff --git a/operations/operations.pro b/operations/operations.pro
+index edce86d..474bef8 100644
+--- a/operations/operations.pro
++++ b/operations/operations.pro
+@@ -1,4 +1,3 @@
+-
+ include(../config.pri)
+ 
+ TARGET = $$GEGLQT_BASELIBNAME-display
+@@ -9,9 +8,16 @@ CONFIG += qt no_keywords plugin
+ VERSION = $$GEGLQT_VERSION
+ 
+ QT += core gui
++contains(HAVE_QT_WIDGETS, yes) {
++    QT += $$QT_WIDGETS
++}
++
++GEGLQT_OPERATION_PREFIX = gegl-qt$$QT_MAJOR_VERSION
++
++DEFINES += GEGLQT_OPERATION_PREFIX=\\\"$${GEGLQT_OPERATION_PREFIX}\\\"
+ 
+ CONFIG += link_pkgconfig
+-PKGCONFIG += gegl
++PKGCONFIG += $$GEGL_PKG
+ 
+ INCLUDEPATH += ../gegl-qt .. # .. because public include have gegl-qt/ prefix
+ LIBS += -L../gegl-qt -l$$GEGLQT_LIBNAME
+diff --git a/plugins/plugins.pro b/plugins/plugins.pro
+index 6d9a667..12460bb 100644
+--- a/plugins/plugins.pro
++++ b/plugins/plugins.pro
+@@ -1,6 +1,8 @@
+ include(../config.pri)
+ 
+ TEMPLATE = subdirs
+-contains(HAVE_QT_DECLARATIVE, yes) {
++
++# Currently don't have anything to register for non-quick1 case, so no bother building
++contains(HAVE_QT_QUICK1, yes) {
+     SUBDIRS += qml-plugin
+ }
+diff --git a/plugins/qml-plugin/GeglQt5/qmldir.in b/plugins/qml-plugin/GeglQt5/qmldir.in
+new file mode 100644
+index 0000000..88efedb
+--- /dev/null
++++ b/plugins/qml-plugin/GeglQt5/qmldir.in
+@@ -0,0 +1 @@
++plugin @GEGLQT_LIBNAME@
+diff --git a/plugins/qml-plugin/qml-plugin.pro b/plugins/qml-plugin/qml-plugin.pro
+index 1bfe618..7c99b52 100644
+--- a/plugins/qml-plugin/qml-plugin.pro
++++ b/plugins/qml-plugin/qml-plugin.pro
+@@ -2,10 +2,18 @@ include(../../config.pri)
+ 
+ TEMPLATE = lib
+ CONFIG += qt plugin no_keywords
+-QT += declarative
++
++contains(HAVE_QT_WIDGETS, yes) {
++    QT += $$QT_WIDGETS
++}
++
++contains(HAVE_QT_DECLARATIVE, yes) {
++    QT += $$QT_DECLARATIVE
++}
++
+ TARGET = $$GEGLQT_QML_API_NAME/$$GEGLQT_LIBNAME
+ 
+-target.path = $$[QT_INSTALL_IMPORTS]/$$GEGLQT_QML_API_NAME
++target.path = $$QTDECLARATIVE_INSTALL_PLUGINS/$$GEGLQT_QML_API_NAME
+ 
+ HEADERS += qml-plugin.h
+ SOURCES += qml-plugin.cpp
+@@ -14,7 +22,7 @@ INCLUDEPATH += ../../gegl-qt ../.. # .. because public include have gegl-qt/ pre
+ LIBS += -L../../gegl-qt -l$$GEGLQT_LIBNAME
+ 
+ CONFIG += link_pkgconfig
+-PKGCONFIG += gegl
++PKGCONFIG += $$GEGL_PKG
+ 
+ OTHER_FILES += \
+     $$GEGLQT_QML_API_NAME/qmldir.in
+diff --git a/pygegl-qt/pygegl-qt.pro b/pygegl-qt/pygegl-qt.pro
+index 7c2efed..92f882f 100644
+--- a/pygegl-qt/pygegl-qt.pro
++++ b/pygegl-qt/pygegl-qt.pro
+@@ -7,13 +7,18 @@ first.depends += generate compile link
+ 
+ TYPESYSTEM_DIR = $$system(pkg-config pyside --variable=typesystemdir)
+ 
+-LIBGEGLQT_SRC_DIR = ../gegl-qt
++LIBGEGLQT_SRC_DIR = $$IN_PWD/../gegl-qt
++LIBGEGLQT_BUILD_DIR = $$OUT_PWD/../gegl-qt
++TOP_SRC_DIR = $$IN_PWD/..
++TOP_BUILD_DIR = $$OUT_PWD/..
+ PYSIDE_INCLUDE_DIR = $$system(pkg-config --variable=includedir pyside)
+ HEADERDIR_QT = $$[QT_INSTALL_HEADERS]
+-GEN_INCLUDE_PATHS = ..:$$LIBGEGLQT_SRC_DIR:$$HEADERDIR_QT/QtCore:$$HEADERDIR_QT
++GEN_INCLUDE_PATHS = $$TOP_SRC_DIR:$$LIBGEGLQT_SRC_DIR:$$HEADERDIR_QT/QtCore:$$HEADERDIR_QT
+ 
+ INCLUDES += \
+-    -I.. \
++    -I$$TOP_BUILD_DIR \
++    -I$$TOP_SRC_DIR \
++    -I$$LIBGEGLQT_BUILD_DIR \
+     -I$$LIBGEGLQT_SRC_DIR \
+     -I$$PYSIDE_INCLUDE_DIR/QtCore \
+     -I$$PYSIDE_INCLUDE_DIR/QtGui \
+@@ -48,7 +53,7 @@ generate.target = generate
+ generate.commands += generatorrunner --generatorSet=shiboken \
+                 global.h \
+                 --include-paths=$$GEN_INCLUDE_PATHS \
+-                --typesystem-paths=.:$$TYPESYSTEM_DIR \
++                --typesystem-paths=$$OUT_PWD:$$IN_PWD:$$TYPESYSTEM_DIR \
+                 --output-directory=. \
+                 typesystem_gegl-qt.xml
+ 
+diff --git a/pygegl-qt/typesystem_gegl-qt.xml.in b/pygegl-qt/typesystem_gegl-qt.xml.in
+index 81aac0c..ca6fba7 100644
+--- a/pygegl-qt/typesystem_gegl-qt.xml.in
++++ b/pygegl-qt/typesystem_gegl-qt.xml.in
+@@ -4,7 +4,7 @@
+     <load-typesystem name="typesystem_declarative.xml" generate="no" />
+ 
+     <primitive-type name="GeglNodePtr">
+-        <conversion-rule file="geglnode_conversions.h"/>
++        <conversion-rule file="@GEGLQT_IN_PWD@/geglnode_conversions.h"/>
+         <include file-name="pygobject.h" location="global"/>
+     </primitive-type>
+ 
+diff --git a/tests/test-nodeviewimplementation/test-nodeviewimplementation.pro b/tests/test-nodeviewimplementation/test-nodeviewimplementation.pro
+index f19431f..ef5753e 100644
+--- a/tests/test-nodeviewimplementation/test-nodeviewimplementation.pro
++++ b/tests/test-nodeviewimplementation/test-nodeviewimplementation.pro
+@@ -1,6 +1,8 @@
+ include(../../config.pri)
+ include(../tests-common.pri)
+ 
++QT += gui $$QT_WIDGETS
++
+ SOURCES += test-nodeviewimplementation.cpp
+ HEADERS += test-nodeviewimplementation.h
+ 
+diff --git a/tests/tests-common.pri b/tests/tests-common.pri
+index 950964d..864bb56 100644
+--- a/tests/tests-common.pri
++++ b/tests/tests-common.pri
+@@ -6,7 +6,7 @@ QT -= gui # Not all tests needs UI
+ CONFIG += debug
+ 
+ CONFIG += link_pkgconfig
+-PKGCONFIG += gegl
++PKGCONFIG += $$GEGL_PKG
+ 
+ isEmpty(USE_EXTERNAL_GEGLQT) {
+     INCLUDEPATH += ../../gegl-qt ../.. # ../.. because public includes have gegl-qt/ prefix
+diff --git a/tests/tests.pro b/tests/tests.pro
+index 35603be..6c162f1 100644
+--- a/tests/tests.pro
++++ b/tests/tests.pro
+@@ -1,3 +1,9 @@
+ TEMPLATE = subdirs
++
+ SUBDIRS += \
+-    test-nodeviewimplementation
++
++contains(HAVE_QT_WIDGETS, yes) {
++    SUBDIRS += \
++        test-nodeviewimplementation \
++
++}
