@@ -14,6 +14,9 @@ Source0:	ftp://ftp.gimp.org/pub/gegl-qt/0.0/%{name}-%{version}.tar.bz2
 # (then adjusted to apply on dist tarball)
 Patch0:		%{name}-git.patch
 URL:		http://www.gegl.org/
+BuildRequires:	QtCore-devel
+BuildRequires:	QtDeclarative-devel
+BuildRequires:	QtGui-devel
 BuildRequires:	doxygen
 BuildRequires:	gegl-devel >= 0.2.0
 BuildRequires:	pkgconfig
@@ -42,6 +45,9 @@ Biblioteka narzędziowa Qt 4 dla biblioteki GEGL.
 Summary:	Header files for gegl-qt4 library
 Summary(pl.UTF-8):	Pliki nagłówkowe biblioteki gegl-qt4
 Group:		Development/Libraries
+Requires:	QtCore-devel
+Requires:	QtDeclarative-devel
+Requires:	QtGui-devel
 Requires:	gegl-qt4 = %{version}-%{release}
 Requires:	gegl-devel >= 0.2.0
 
