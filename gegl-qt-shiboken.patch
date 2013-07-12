@@ -1,0 +1,20 @@
+--- gegl-qt-0.0.7/pygegl-qt/pygegl-qt.pro.orig	2013-07-12 19:13:36.533142354 +0200
++++ gegl-qt-0.0.7/pygegl-qt/pygegl-qt.pro	2013-07-12 20:19:08.606310673 +0200
+@@ -33,7 +33,7 @@
+         -I$$[QT_INSTALL_HEADERS]/QtNetwork
+ }
+ 
+-INCLUDES += $$system(pkg-config --cflags gegl pygobject-2.0 gobject-2.0 pyside)
++INCLUDES += $$system(pkg-config --cflags gegl-0.2 pygobject-2.0 gobject-2.0 pyside shiboken QtCore)
+ 
+ # pkg-config --libs pyside is buggy for pyside<1.0.5 due
+ # http://bugs.pyside.org/show_bug.cgi?id=929
+@@ -50,7 +50,7 @@
+ # Generate
+ QMAKE_EXTRA_TARGETS += generate
+ generate.target = generate
+-generate.commands += generatorrunner --generatorSet=shiboken \
++generate.commands += shiboken \
+                 global.h \
+                 --include-paths=$$GEN_INCLUDE_PATHS \
+                 --typesystem-paths=$$OUT_PWD:$$IN_PWD:$$TYPESYSTEM_DIR \

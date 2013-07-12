@@ -1,6 +1,9 @@
 # TODO:
-# - python support (PySide)
 # - qt5
+#
+# Conditional build:
+%bcond_without	python	# Python (PySide) binding
+#
 Summary:	Qt utility library for GEGL
 Summary(pl.UTF-8):	Biblioteka narzędziowa Qt dla biblioteki GEGL
 Name:		gegl-qt
@@ -13,6 +16,7 @@ Source0:	ftp://ftp.gimp.org/pub/gegl-qt/0.0/%{name}-%{version}.tar.bz2
 # git diff 0.0.7 4f46898e7dfaade23553f167bb03caf95171c0e7 (before switch to gegl 0.3)
 # (then adjusted to apply on dist tarball)
 Patch0:		%{name}-git.patch
+Patch1:		%{name}-shiboken.patch
 URL:		http://www.gegl.org/
 BuildRequires:	QtCore-devel
 BuildRequires:	QtDeclarative-devel
@@ -21,7 +25,13 @@ BuildRequires:	doxygen
 BuildRequires:	gegl-devel >= 0.2.0
 BuildRequires:	pkgconfig
 BuildRequires:	qt4-qmake
+BuildRequires:	rpmbuild(macros) >= 1.219
+BuildRequires:	texlive-format-pdflatex
 BuildRequires:	texlive-latex-extend
+%if %{with python}
+BuildRequires:	python-PySide-devel
+BuildRequires:	shiboken
+%endif
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %description
@@ -58,6 +68,19 @@ Header files for gegl-qt4 library.
 %description -n gegl-qt4-devel -l pl.UTF-8
 Pliki nagłówkowe biblioteki gegl-qt4.
 
+%package -n python-gegl-qt4
+Summary:	Python (PySide) binding for gegl-qt4 library
+Summary(pl.UTF-8):	Wiązania Pythona (PySide) do biblioteki gegl-qt4
+Group:		Libraries/Python
+Requires:	gegl-qt4 = %{version}-%{release}
+Requires:	python-PySide
+
+%description -n python-gegl-qt4
+Python (PySide) binding for gegl-qt4 library.
+
+%description -n python-gegl-qt4 -l pl.UTF-8
+Wiązania Pythona (PySide) do biblioteki gegl-qt4.
+
 %package apidocs
 Summary:	gegl library API documentation
 Summary(pl.UTF-8):	Dokumentacja API biblioteki gegl
@@ -73,12 +96,14 @@ Dokumentacja API biblioteki gegl.
 %prep
 %setup -q
 %patch0 -p1
+%patch1 -p1
 
 %build
 qmake-qt4 \
 	QMAKE_CXX="%{__cxx}" \
 	QMAKE_CXXFLAGS_RELEASE="%{rpmcxxflags}" \
-	QMAKE_LFLAGS_RELEASE="%{rpmldflags}"
+	QMAKE_LFLAGS_RELEASE="%{rpmldflags}" \
+	%{!?with_python:HAVE_PYSIDE=no}
 
 %{__make}
 
@@ -87,6 +112,15 @@ rm -rf $RPM_BUILD_ROOT
 
 %{__make} install \
 	INSTALL_ROOT=$RPM_BUILD_ROOT
+
+# extraneous symlink
+%{__rm} $RPM_BUILD_ROOT%{_libdir}/libgegl-qt4-0.1.so.0.0
+
+%if %{with python}
+%py_comp $RPM_BUILD_ROOT%{py_sitedir}
+%py_ocomp $RPM_BUILD_ROOT%{py_sitedir}
+%py_postclean
+%endif
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -109,6 +143,13 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{_libdir}/libgegl-qt4-0.1.so
 %{_includedir}/gegl-qt4-0.1
 %{_pkgconfigdir}/gegl-qt4-0.1.pc
+
+%if %{with python}
+%files -n python-gegl-qt4
+%defattr(644,root,root,755)
+%attr(755,root,root) %{py_sitedir}/gegl-qt4-0.1/geglqt.so
+%{py_sitedir}/pygeglqt4.py[co]
+%endif
 
 %files apidocs
 %defattr(644,root,root,755)
