@@ -1,0 +1,42 @@
+--- gegl-qt-0.0.7/pygegl-qt/pygegl-qt.pro.orig	2014-10-15 18:57:31.885719725 +0200
++++ gegl-qt-0.0.7/pygegl-qt/pygegl-qt.pro	2014-10-15 20:39:37.055462675 +0200
+@@ -49,7 +49,8 @@
+ 
+ # Generate
+ QMAKE_EXTRA_TARGETS += generate
+-generate.target = generate
++generate.depends = global.h typesystem_gegl-qt.xml
++generate.target = geglqt
+ generate.commands += shiboken \
+                 global.h \
+                 --include-paths=$$GEN_INCLUDE_PATHS \
+@@ -61,8 +62,9 @@
+ QMAKE_EXTRA_TARGETS += compile
+ compile.depends += generate
+ compile.target = compile
+-compile.commands += g++ -DNO_IMPORT_PYGOBJECT geglqt/geglqt_*.cpp $$INCLUDES -Wall -fPIC -c;
+-compile.commands += g++ geglqt/geglqt_module_wrapper.cpp $$INCLUDES -Wall -fPIC -c
++compile.commands += $$QMAKE_CXX $$QMAKE_CXXFLAGS_RELEASE -DNO_IMPORT_PYGOBJECT geglqt/geglqt_*.cpp $$INCLUDES -Wall -fPIC -c;
++compile.commands += $$QMAKE_CXX $$QMAKE_CXXFLAGS_RELEASE geglqt/geglqt_module_wrapper.cpp $$INCLUDES -Wall -fPIC -c;
++compile.commands += touch compile
+ 
+ 
+ LIBRARIES += -L../../gegl-qt -l$$GEGLQT_LIBNAME
+@@ -74,7 +75,7 @@
+ link.target = $$GEGLQT_LIBNAME/geglqt.so
+ link.commands += mkdir -p $$GEGLQT_LIBNAME;
+ link.commands += cd $$GEGLQT_LIBNAME;
+-link.commands += g++ ../geglqt*wrapper.o $$LIBRARIES -fPIC -shared -Wl,-soname,geglqt.so -o geglqt.so
++link.commands += $$QMAKE_CXX $$QMAKE_LFLAGS_RELEASE ../geglqt*wrapper.o $$LIBRARIES -fPIC -shared -Wl,-soname,geglqt.so -o geglqt.so
+ 
+ # Install
+ PYTHON_SITE_PACKAGES = $$system(`echo $PYTHON` -c \"from distutils.sysconfig import get_python_lib; print get_python_lib(True)\")
+@@ -83,7 +84,7 @@
+ 
+ }
+ 
+-modules.files = $$GEGLQT_LIBNAME/geglqt.so
++modules.files = $$OUT_PWD/$$GEGLQT_LIBNAME/geglqt.so
+ modules.CONFIG += no_check_exist
+ modules.path = $$PYTHON_SITE_PACKAGES/$$GEGLQT_LIBNAME
+ 

@@ -1,8 +1,9 @@
-# TODO:
-# - qt5
+# TODO: qml plugin for qt5
 #
 # Conditional build:
-%bcond_without	python	# Python (PySide) binding
+%bcond_without	python	# Python (PySide) binding for Qt4 library
+%bcond_without	qt4	# Qt4 library
+%bcond_without	qt5	# Qt5 library
 #
 Summary:	Qt utility library for GEGL
 Summary(pl.UTF-8):	Biblioteka narzędziowa Qt dla biblioteki GEGL
@@ -17,14 +18,25 @@ Source0:	ftp://ftp.gimp.org/pub/gegl-qt/0.0/%{name}-%{version}.tar.bz2
 # (then adjusted to apply on dist tarball)
 Patch0:		%{name}-git.patch
 Patch1:		%{name}-shiboken.patch
+Patch2:		%{name}-qmake.patch
+Patch3:		%{name}-qt5.patch
 URL:		http://www.gegl.org/
-BuildRequires:	QtCore-devel
-BuildRequires:	QtDeclarative-devel
-BuildRequires:	QtGui-devel
+%if %{with qt4}
+BuildRequires:	QtCore-devel >= 4
+BuildRequires:	QtDeclarative-devel >= 4
+BuildRequires:	QtGui-devel >= 4
+%endif
+%if %{with qt5}
+BuildRequires:	Qt5Core-devel >= 5
+BuildRequires:	Qt5Declarative-devel >= 5
+BuildRequires:	Qt5Gui-devel >= 5
+BuildRequires:	Qt5Widgets-devel >= 5
+%endif
 BuildRequires:	doxygen
 BuildRequires:	gegl-devel >= 0.2.0
 BuildRequires:	pkgconfig
-BuildRequires:	qt4-qmake
+%{?with_qt4:BuildRequires:	qt4-qmake >= 4}
+%{?with_qt5:BuildRequires:	qt5-qmake >= 5}
 BuildRequires:	rpmbuild(macros) >= 1.219
 BuildRequires:	texlive-format-pdflatex
 BuildRequires:	texlive-latex-extend
@@ -42,7 +54,7 @@ Biblioteka narzędziowa Qt dla biblioteki GEGL.
 
 %package -n gegl-qt4
 Summary:	Qt 4 utility library for GEGL
-Summary(pl.UTF-8):	Biblioteka narzędziowa Qt dla biblioteki GEGL
+Summary(pl.UTF-8):	Biblioteka narzędziowa Qt 4 dla biblioteki GEGL
 Group:		X11/Libraries
 Requires:	gegl >= 0.2.0
 
@@ -56,9 +68,9 @@ Biblioteka narzędziowa Qt 4 dla biblioteki GEGL.
 Summary:	Header files for gegl-qt4 library
 Summary(pl.UTF-8):	Pliki nagłówkowe biblioteki gegl-qt4
 Group:		Development/Libraries
-Requires:	QtCore-devel
-Requires:	QtDeclarative-devel
-Requires:	QtGui-devel
+Requires:	QtCore-devel >= 4
+Requires:	QtDeclarative-devel >= 4
+Requires:	QtGui-devel >= 4
 Requires:	gegl-qt4 = %{version}-%{release}
 Requires:	gegl-devel >= 0.2.0
 
@@ -81,6 +93,34 @@ Python (PySide) binding for gegl-qt4 library.
 %description -n python-gegl-qt4 -l pl.UTF-8
 Wiązania Pythona (PySide) do biblioteki gegl-qt4.
 
+%package -n gegl-qt5
+Summary:	Qt 5 utility library for GEGL
+Summary(pl.UTF-8):	Biblioteka narzędziowa Qt 5 dla biblioteki GEGL
+Group:		X11/Libraries
+Requires:	gegl >= 0.2.0
+
+%description -n gegl-qt5
+Qt 5 utility library for GEGL.
+
+%description -n gegl-qt5 -l pl.UTF-8
+Biblioteka narzędziowa Qt 5 dla biblioteki GEGL.
+
+%package -n gegl-qt5-devel
+Summary:	Header files for gegl-qt5 library
+Summary(pl.UTF-8):	Pliki nagłówkowe biblioteki gegl-qt5
+Group:		Development/Libraries
+Requires:	Qt5Core-devel >= 5
+Requires:	Qt5Declarative-devel >= 5
+Requires:	Qt5Gui-devel >= 5
+Requires:	gegl-qt5 = %{version}-%{release}
+Requires:	gegl-devel >= 0.2.0
+
+%description -n gegl-qt5-devel
+Header files for gegl-qt5 library.
+
+%description -n gegl-qt5-devel -l pl.UTF-8
+Pliki nagłówkowe biblioteki gegl-qt5.
+
 %package apidocs
 Summary:	gegl library API documentation
 Summary(pl.UTF-8):	Dokumentacja API biblioteki gegl
@@ -97,20 +137,42 @@ Dokumentacja API biblioteki gegl.
 %setup -q
 %patch0 -p1
 %patch1 -p1
+%patch2 -p1
+%patch3 -p1
 
 %build
-qmake-qt4 \
+%if %{with qt4}
+install -d build-qt4
+cd build-qt4
+qmake-qt4 ../gegl-qt.pro \
 	QMAKE_CXX="%{__cxx}" \
 	QMAKE_CXXFLAGS_RELEASE="%{rpmcxxflags}" \
 	QMAKE_LFLAGS_RELEASE="%{rpmldflags}" \
 	%{!?with_python:HAVE_PYSIDE=no}
 
 %{__make}
+cd ..
+ln -snf build-qt4 build
+%endif
+
+%if %{with qt5}
+install -d build-qt5
+cd build-qt5
+qmake-qt5 ../gegl-qt.pro \
+	QMAKE_CXX="%{__cxx}" \
+	QMAKE_CXXFLAGS_RELEASE="%{rpmcxxflags}" \
+	QMAKE_LFLAGS_RELEASE="%{rpmldflags}"
+
+%{__make}
+cd ..
+test -L build || ln -snf build-qt5 build
+%endif
 
 %install
 rm -rf $RPM_BUILD_ROOT
 
-%{__make} install \
+%if %{with qt4}
+%{__make} -C build-qt4 install \
 	INSTALL_ROOT=$RPM_BUILD_ROOT
 
 # extraneous symlink
@@ -121,6 +183,15 @@ rm -rf $RPM_BUILD_ROOT
 %py_ocomp $RPM_BUILD_ROOT%{py_sitedir}
 %py_postclean
 %endif
+%endif
+
+%if %{with qt5}
+%{__make} -C build-qt5 install \
+	INSTALL_ROOT=$RPM_BUILD_ROOT
+
+# extraneous symlink
+%{__rm} $RPM_BUILD_ROOT%{_libdir}/libgegl-qt5-0.1.so.0.0
+%endif
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -128,6 +199,7 @@ rm -rf $RPM_BUILD_ROOT
 %post	-p /sbin/ldconfig
 %postun	-p /sbin/ldconfig
 
+%if %{with qt4}
 %files -n gegl-qt4
 %defattr(644,root,root,755)
 %doc README.txt
@@ -150,7 +222,27 @@ rm -rf $RPM_BUILD_ROOT
 %attr(755,root,root) %{py_sitedir}/gegl-qt4-0.1/geglqt.so
 %{py_sitedir}/pygeglqt4.py[co]
 %endif
+%endif
+
+%if %{with qt5}
+%files -n gegl-qt5
+%defattr(644,root,root,755)
+%doc README.txt
+%attr(755,root,root) %{_libdir}/libgegl-qt5-0.1.so.*.*.*
+%attr(755,root,root) %ghost %{_libdir}/libgegl-qt5-0.1.so.0
+%attr(755,root,root) %{_libdir}/gegl-0.2/libgegl-qt5-display.so
+# not ready for qt5 plugin format (_disabled in qt5 patch)
+#%dir %{_libdir}/qt4/imports/GeglQt4
+#%attr(755,root,root) %{_libdir}/qt4/imports/GeglQt4/libgegl-qt4-0.1.so
+#%{_libdir}/qt4/imports/GeglQt4/qmldir
+
+%files -n gegl-qt5-devel
+%defattr(644,root,root,755)
+%attr(755,root,root) %{_libdir}/libgegl-qt5-0.1.so
+%{_includedir}/gegl-qt5-0.1
+%{_pkgconfigdir}/gegl-qt5-0.1.pc
+%endif
 
 %files apidocs
 %defattr(644,root,root,755)
-%doc doc/html/*
+%doc build/doc/html/*

@@ -1,0 +1,47 @@
+--- gegl-qt-0.0.7/config.pri.orig	2014-10-15 21:31:05.125333082 +0200
++++ gegl-qt-0.0.7/config.pri	2014-10-16 20:21:36.518548768 +0200
+@@ -67,7 +67,7 @@
+ # QtDeclarative
+ HAVE_QT_DECLARATIVE = yes
+ contains(QT_MAJOR_VERSION, 5) {
+-    !contains(QT_CONFIG, declarative) {
++    !system(pkg-config Qt5Declarative_disabled) {
+         HAVE_QT_DECLARATIVE = no
+     }
+ } else {
+@@ -79,22 +79,16 @@
+ # QtQuick1 provides QDeclarativeView and QDeclarativeItem
+ # On Qt4 it is actually a part of the QtDeclarative module
+ HAVE_QT_QUICK1 = yes
+-contains(QT_MAJOR_VERSION, 5) {
+-    !contains(QT_CONFIG, quick1) {
+-        HAVE_QT_QUICK1 = no
+-    }
+-} else {
+-    !contains(HAVE_QT_DECLARATIVE, yes) {
+-        HAVE_QT_QUICK1 = no
+-    }
++!contains(HAVE_QT_DECLARATIVE, yes) {
++     HAVE_QT_QUICK1 = no
+ }
+ 
+ # On Qt5, quick or quick1 is required in addition to declarative for "QT" option
+ # On Qt4, it should only contain declarative
+ contains(QT_MAJOR_VERSION, 5) {
+-    QT_DECLARATIVE = declarative quick
++    QT_DECLARATIVE = declarative
+     contains(HAVE_QT_QUICK1, yes) {
+-        QT_DECLARATIVE += quick1
++       QT_DECLARATIVE += quick1
+     }
+ } else {
+     QT_DECLARATIVE = declarative
+@@ -135,7 +129,7 @@
+ # QtWidgets
+ HAVE_QT_WIDGETS = yes
+ contains(QT_MAJOR_VERSION, 5) {
+-    !system(pkg-config QtWidgets) {
++    !system(pkg-config Qt5Widgets) {
+         HAVE_QT_WIDGETS = no
+     }
+ } else {
