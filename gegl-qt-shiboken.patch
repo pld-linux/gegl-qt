@@ -5,7 +5,7 @@
  }
  
 -INCLUDES += $$system(pkg-config --cflags gegl pygobject-2.0 gobject-2.0 pyside)
-+INCLUDES += $$system(pkg-config --cflags gegl-0.2 pygobject-2.0 gobject-2.0 pyside shiboken QtCore)
++INCLUDES += $$system(pkg-config --cflags $$GEGL_PKG pygobject-2.0 gobject-2.0 pyside-py2 shiboken-py2 QtCore)
  
  # pkg-config --libs pyside is buggy for pyside<1.0.5 due
  # http://bugs.pyside.org/show_bug.cgi?id=929

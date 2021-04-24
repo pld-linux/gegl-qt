@@ -1,0 +1,30 @@
+From 0e48db1e2baac9dde31b1a0b9add2ccd28df012b Mon Sep 17 00:00:00 2001
+From: Jon Nordby <jononor@gmail.com>
+Date: Fri, 28 Jun 2013 03:04:24 +0200
+Subject: [PATCH] Build: allow to build against gegl-0.3 (git master) also
+
+---
+ config.pri | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/config.pri b/config.pri
+index b279869..7fd4ecd 100644
+--- a/config.pri
++++ b/config.pri
+@@ -23,6 +23,13 @@ MOC_DIR = .moc
+ HAVE_GEGL = no
+ GEGL_PKG = ""
+ 
++contains(HAVE_GEGL, no) {
++    system(pkg-config --exists gegl-0.3) {
++        HAVE_GEGL = 0.3
++        GEGL_PKG = gegl-0.3
++    }
++}
++
+ contains(HAVE_GEGL, no) {
+     system(pkg-config --exists gegl-0.2) {
+         HAVE_GEGL = 0.2
+-- 
+GitLab
+

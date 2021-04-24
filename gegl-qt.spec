@@ -12,7 +12,7 @@ Version:	0.0.7
 Release:	1
 License:	LGPL v3+
 Group:		Libraries
-Source0:	ftp://ftp.gimp.org/pub/gegl-qt/0.0/%{name}-%{version}.tar.bz2
+Source0:	https://download.gimp.org/pub/gegl-qt/0.0/%{name}-%{version}.tar.bz2
 # Source0-md5:	fbb0692af354d404615980a68c8a88f4
 # git diff 0.0.7 4f46898e7dfaade23553f167bb03caf95171c0e7 (before switch to gegl 0.3)
 # (then adjusted to apply on dist tarball)
@@ -20,7 +20,11 @@ Patch0:		%{name}-git.patch
 Patch1:		%{name}-shiboken.patch
 Patch2:		%{name}-qmake.patch
 Patch3:		%{name}-qt5.patch
-URL:		http://www.gegl.org/
+# https://gitlab.gnome.org/Archive/gegl-qt/-/commit/0e48db1e2baac9dde31b1a0b9add2ccd28df012b.patch (last commit)
+Patch4:		%{name}-gegl-0.3.patch
+Patch5:		%{name}-gegl-0.4.patch
+Patch6:		%{name}-python-dirs.patch
+URL:		https://www.gegl.org/
 %if %{with qt4}
 BuildRequires:	QtCore-devel >= 4
 BuildRequires:	QtDeclarative-devel >= 4
@@ -41,8 +45,8 @@ BuildRequires:	rpmbuild(macros) >= 1.219
 BuildRequires:	texlive-format-pdflatex
 BuildRequires:	texlive-latex-extend
 %if %{with python}
-BuildRequires:	python-PySide-devel
-BuildRequires:	shiboken
+BuildRequires:	python-PySide-devel >= 4.8_1.2.4-1
+BuildRequires:	shiboken >= 1.2.4-3
 %endif
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
@@ -139,6 +143,9 @@ Dokumentacja API biblioteki gegl.
 %patch1 -p1
 %patch2 -p1
 %patch3 -p1
+%patch4 -p1
+%patch5 -p1
+%patch6 -p1
 
 %build
 %if %{with qt4}
@@ -205,7 +212,8 @@ rm -rf $RPM_BUILD_ROOT
 %doc README.txt
 %attr(755,root,root) %{_libdir}/libgegl-qt4-0.1.so.*.*.*
 %attr(755,root,root) %ghost %{_libdir}/libgegl-qt4-0.1.so.0
-%attr(755,root,root) %{_libdir}/gegl-0.2/libgegl-qt4-display.so
+# not ready for gegl-0.4
+#%attr(755,root,root) %{_libdir}/gegl-0.3/libgegl-qt4-display.so
 %dir %{_libdir}/qt4/imports/GeglQt4
 %attr(755,root,root) %{_libdir}/qt4/imports/GeglQt4/libgegl-qt4-0.1.so
 %{_libdir}/qt4/imports/GeglQt4/qmldir
@@ -230,7 +238,8 @@ rm -rf $RPM_BUILD_ROOT
 %doc README.txt
 %attr(755,root,root) %{_libdir}/libgegl-qt5-0.1.so.*.*.*
 %attr(755,root,root) %ghost %{_libdir}/libgegl-qt5-0.1.so.0
-%attr(755,root,root) %{_libdir}/gegl-0.2/libgegl-qt5-display.so
+# not ready for gegl-0.4
+#%attr(755,root,root) %{_libdir}/gegl-0.3/libgegl-qt5-display.so
 # not ready for qt5 plugin format (_disabled in qt5 patch)
 #%dir %{_libdir}/qt4/imports/GeglQt4
 #%attr(755,root,root) %{_libdir}/qt4/imports/GeglQt4/libgegl-qt4-0.1.so

@@ -1,0 +1,39 @@
+--- gegl-qt-0.0.7/config.pri.orig	2021-04-24 09:39:50.524992585 +0200
++++ gegl-qt-0.0.7/config.pri	2021-04-24 09:40:32.558098205 +0200
+@@ -24,6 +24,13 @@
+ GEGL_PKG = ""
+ 
+ contains(HAVE_GEGL, no) {
++    system(pkg-config --exists gegl-0.4) {
++        HAVE_GEGL = 0.4
++        GEGL_PKG = gegl-0.4
++    }
++}
++
++contains(HAVE_GEGL, no) {
+     system(pkg-config --exists gegl-0.3) {
+         HAVE_GEGL = 0.3
+         GEGL_PKG = gegl-0.3
+#--- gegl-qt-0.0.7/pygegl-qt/pygegl-qt.pro.orig	2021-04-24 09:41:03.621263255 +0200
+#+++ gegl-qt-0.0.7/pygegl-qt/pygegl-qt.pro	2021-04-24 09:58:37.222222075 +0200
+#@@ -33,7 +33,7 @@
+#         -I$$[QT_INSTALL_HEADERS]/QtNetwork
+# }
+# 
+#-INCLUDES += $$system(pkg-config --cflags gegl-0.2 pygobject-2.0 gobject-2.0 pyside shiboken QtCore)
+#+INCLUDES += $$system(pkg-config --cflags gegl-0.4 pygobject-2.0 gobject-2.0 pyside shiboken QtCore)
+# 
+# # pkg-config --libs pyside is buggy for pyside<1.0.5 due
+# # http://bugs.pyside.org/show_bug.cgi?id=929
+--- gegl-qt-0.0.7/gegl-qt.pro.orig	2021-04-24 10:04:48.540210473 +0200
++++ gegl-qt-0.0.7/gegl-qt.pro	2021-04-24 11:03:32.847784327 +0200
+@@ -10,9 +10,6 @@
+     contains(HAVE_PYSIDE, yes) {
+         SUBDIRS += pygegl-qt
+     }
+-    contains(HAVE_QT_WIDGETS, yes) {
+-        SUBDIRS += operations
+-    }
+     SUBDIRS +=  plugins doc
+ 
+ } else {
